@@ -131,12 +131,14 @@ func Parse(frame []byte) (Message, bool) {
 		return Message{}, false
 	}
 	message := Message{Received: time.Now().UTC().Format(time.RFC3339), Source: addresses[1], Destination: addresses[0], Path: strings.Join(addresses[2:], " > "), Payload: payload, Raw: string(frame), Kind: "packet", Icon: "radio"}
-	message.Weather = ParseWeather(payload)
 	message.Position = ParsePosition(payload)
+	if message.Position != nil && message.Position.SymbolCode == "_" {
+		message.Weather = ParseWeather(payload)
+	}
 	if message.Position != nil {
 		message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
 	}
-	if message.Weather != nil || strings.Contains(strings.ToUpper(payload), "WX") || strings.Contains(strings.ToUpper(payload), "WEATHER") {
+	if message.Weather != nil {
 		message.Kind, message.Icon = "weather", "weather"
 	}
 	message.Type = packetType(payload)
@@ -198,6 +200,9 @@ func ParsePosition(payload string) *Position {
 	if value[17] != 'E' && value[17] != 'W' {
 		return nil
 	}
+	if !isSymbolTable(value[8]) {
+		return nil
+	}
 	if value[7] == 'S' {
 		lat = -lat
 	}
@@ -205,6 +210,10 @@ func ParsePosition(payload string) *Position {
 		lon = -lon
 	}
 	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[8]), SymbolCode: string(value[18])}, value[19:])
+}
+
+func isSymbolTable(value byte) bool {
+	return value == '/' || value == '\\' || value >= '0' && value <= '9' || value >= 'A' && value <= 'Z' || value >= 'a' && value <= 'z'
 }
 
 func positionMetadata(position *Position, comment string) *Position {
@@ -361,6 +370,9 @@ var weatherPatterns = map[string]*regexp.Regexp{
 }
 
 func ParseWeather(payload string) *Weather {
+	if !weatherFields.MatchString(payload) {
+		return nil
+	}
 	weather := &Weather{}
 	found := false
 	if match := weatherPatterns["temperature"].FindStringSubmatch(payload); len(match) == 2 {
@@ -413,6 +425,8 @@ func ParseWeather(payload string) *Weather {
 	}
 	return weather
 }
+
+var weatherFields = regexp.MustCompile(`(?i)(\d{3}/\d{3}|g\d{3}|t-?\d{3}|r\d{3}|p\d{3}|P\d{3}|b\d{5}|h\d{2})`)
 
 func DecodeCallsign(address []byte) string {
 	call := make([]byte, 6)

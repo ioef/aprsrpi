@@ -46,7 +46,9 @@ function spriteStyle(message) {
   const index = message.symbol.charCodeAt(1) - 33
   if (index < 0 || index > 95) return {}
   const sheet = message.symbol[0] === '\\' ? 1 : 0
-  return { backgroundImage: `url('/digipi/aprs-symbols-128-${sheet}.png')`, backgroundPosition: `${-(index % 16) * 56}px ${-Math.floor(index / 16) * 56}px` }
+  const column = index % 16
+  const row = Math.floor(index / 16)
+  return { '--sprite-column': column, '--sprite-row': row, backgroundImage: `url('/digipi/aprs-symbols-128-${sheet}.png')` }
 }
 
 function connect() {

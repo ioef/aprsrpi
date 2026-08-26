@@ -111,6 +111,7 @@ func (c *Client) session(ctx context.Context, receive func(string)) error {
 			}
 			continue
 		}
+		logging.Debugf("aprs-is server line=%q", line)
 		if strings.HasPrefix(line, "#") || line == "" {
 			continue
 		}

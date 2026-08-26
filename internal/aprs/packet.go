@@ -21,12 +21,14 @@ func ParseTNC2(line string) (Message, bool) {
 		return Message{}, false
 	}
 	message := Message{Source: strings.TrimSpace(header[0]), Destination: strings.TrimSpace(addresses[0]), Path: strings.Join(addresses[1:], " > "), Payload: CleanPayload([]byte(parts[1])), Raw: line, Kind: "packet", Icon: "radio"}
-	message.Weather = ParseWeather(message.Payload)
 	message.Position = ParsePosition(message.Payload)
+	if message.Position != nil && message.Position.SymbolCode == "_" {
+		message.Weather = ParseWeather(message.Payload)
+	}
 	if message.Position != nil {
 		message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
 	}
-	if message.Weather != nil || strings.Contains(strings.ToUpper(message.Payload), "WX") || strings.Contains(strings.ToUpper(message.Payload), "WEATHER") {
+	if message.Weather != nil {
 		message.Kind, message.Icon = "weather", "weather"
 	}
 	if strings.HasPrefix(message.Payload, ":") {
@@ -36,7 +38,6 @@ func ParseTNC2(line string) (Message, bool) {
 	message.Type = packetType(message.Payload)
 	return message, true
 }
-
 func TNC2(message Message) string {
 	header := message.Source + ">" + message.Destination
 	if message.Path != "" {

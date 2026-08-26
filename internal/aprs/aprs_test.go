@@ -114,6 +114,19 @@ func TestParseStandardWeather(t *testing.T) {
 	}
 }
 
+func TestOverlayPositionIsNotWeather(t *testing.T) {
+	message, ok := ParseTNC2("SV2HNH>APDW18,WIDE1-1:!4039.62NS02257.66E#PHG2480http://sv2hnh.no-ip.org:8901/")
+	if !ok || message.Position == nil {
+		t.Fatal("overlay position was not decoded")
+	}
+	if message.Position.SymbolTable != "S" || message.Position.SymbolCode != "#" {
+		t.Fatalf("symbol = %q%q", message.Position.SymbolTable, message.Position.SymbolCode)
+	}
+	if message.Weather != nil || message.Kind == "weather" {
+		t.Fatalf("non-weather packet classified as weather: %+v", message)
+	}
+}
+
 func TestCleanPayloadKeepsMessageTextReadable(t *testing.T) {
 	got := CleanPayload([]byte(":SV2JLD   :hello\r\n\xffworld"))
 	if got != ":SV2JLD   :hello �world" {
@@ -137,5 +150,15 @@ func TestParseTimestampedWeatherPackets(t *testing.T) {
 		if message.Kind != "weather" || message.Type != "position" {
 			t.Fatalf("classification = kind=%s type=%s", message.Kind, message.Type)
 		}
+	}
+}
+
+func TestNormalPositionIsNotClassifiedAsWeather(t *testing.T) {
+	message, ok := ParseTNC2("SV2HNH>APRS:!4039.62NS02257.66E#PHG2480http://sv2hnh.no-ip.org:8901/")
+	if !ok || message.Position == nil {
+		t.Fatal("position report was not decoded")
+	}
+	if message.Weather != nil || message.Kind == "weather" {
+		t.Fatalf("normal position classified as weather: %+v", message)
 	}
 }

@@ -131,6 +131,8 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 				if err := bot.Handle(radio, message, bot.Config{Callsign: settings.Bot.Callsign, Location: settings.Bot.Location, WeatherCity: settings.Bot.WeatherCity, Repeaters: settings.Bot.Repeaters, Sunrise: settings.Bot.Sunrise, Sunset: settings.Bot.Sunset, OpenWeatherAPIKey: settings.Bot.OpenWeatherAPIKey}); err != nil {
 					logging.Warnf("bot reply failed: %v", err)
 				}
+			} else {
+				logging.Warnf("rf packet rejected: invalid KISS/AX.25 frame length=%d", len(frame))
 			}
 		}
 		radio.Clear(device)
