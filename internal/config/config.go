@@ -110,7 +110,7 @@ func WithDefaults(value Config) Config {
 		value.Station.SymbolTable = "/"
 	}
 	if value.Station.SymbolCode == "" {
-		value.Station.SymbolCode = "&"
+		value.Station.SymbolCode = "l"
 	}
 	if value.Station.BeaconMinutes == 0 {
 		value.Station.BeaconMinutes = 30

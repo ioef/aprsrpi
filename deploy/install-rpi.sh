@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_ROOT="${APRSRPI_ROOT:-/opt/aprsrpi}"
-APP_USER="${APRSRPI_USER:-pi}"
+APP_USER="${APRSRPI_USER:-$USER}"
 CONFIG_DIR="/etc/aprsrpi"
 SERVICE_NAME="aprsrpi.service"
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
