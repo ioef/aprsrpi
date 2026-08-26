@@ -178,12 +178,27 @@ func rfUpload(message aprs.Message, igateCall string) string {
 	if igateCall == "" {
 		igateCall = "SV2JLD"
 	}
-	message.Path = strings.TrimSpace(message.Path)
-	if message.Path != "" {
-		message.Path += " > qAR > " + igateCall
-	} else {
-		message.Path = "qAR > " + igateCall
+	path := make([]string, 0)
+	items := strings.Split(message.Path, " > ")
+	skipNext := false
+	for _, item := range items {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		item = strings.TrimSpace(item)
+		upper := strings.ToUpper(strings.TrimSuffix(item, "*"))
+		if item == "" || upper == "TCPIP" || upper == "TCPXX" || upper == "RFONLY" || upper == "NOGATE" {
+			continue
+		}
+		if strings.HasPrefix(upper, "Q") {
+			skipNext = true
+			continue
+		}
+		path = append(path, item)
 	}
+	path = append(path, "qAR", igateCall)
+	message.Path = strings.Join(path, " > ")
 	return aprs.TNC2(message)
 }
 

@@ -97,6 +97,10 @@ Set `HTTP_ADDRESS` to change the web listener and `WEB_ROOT` when serving a diff
 
 The kiosk currently uses APRS sprite sheets in `web/public/digipi`. These are retained so individual files can be replaced with your own licensed alternatives. Confirm the asset license or replace them before redistribution.
 
+## APRS symbol calculation
+
+APRS symbols are selected deterministically from the table character and symbol character. Each sprite sheet is `2048x768`, containing `16x6` cells of `128x128` pixels. The symbol index is `ord(symbolCharacter) - 33`; the column is `index % 16` and the row is `index / 16`. The `/` table uses the primary sheet, the `\\` table uses the alternate sheet, and alphanumeric table characters are overlays on the primary symbol. This preserves symbols such as `S#` and `T_` correctly.
+
 ## Bot, igate, and digipeater
 
 The bot only replies to addressed APRS messages sent to `SV2JLD` by default. Configure `BOT_CALLSIGN` and optionally `BOT_REPEATERS`; supported commands are `WHEREMAI`, `WHEREAMI`, `ISS_LOCATION`, `ISS_ASTROS`, `SKGWEATHER`, `WEATHER?CITY`, `TIP`, `REPEATERS`, `SUNRISE`, `BEACON`, and `HELP`. Unknown addressed commands receive an `Unknown command. Try HELP` reply.

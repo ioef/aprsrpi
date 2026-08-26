@@ -18,9 +18,11 @@ button { color: inherit; font: inherit; }
 .hero-meta { justify-content: space-between; color: #8caba8; font: 12px 'DM Mono', monospace; letter-spacing: .09em; }
 .identity { display: flex; align-items: center; gap: 22px; margin-top: 18px; }
 .aprs-symbol { display: block; width: 68px; height: 68px; flex: 0 0 68px; background-repeat: no-repeat; background-size: 1088px 408px; background-position: calc(var(--sprite-column, 0) * -68px) calc(var(--sprite-row, 0) * -68px); image-rendering: auto; }
-.sprite-radio { background-image: url('/digipi/aprs-symbols-128-0.png'); background-position: 0 0; }
-.sprite-weather { background-image: url('/digipi/aprs-symbols-128-1.png'); background-position: 0 0; }
-.sprite-message { background-image: url('/digipi/aprs-symbols-128-2.png'); background-position: -112px 0; }
+.aprs-symbol[data-overlay] { position: relative; }
+.aprs-symbol[data-overlay]::after { content: attr(data-overlay); position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font: 700 24px 'DM Mono', monospace; line-height: 1; text-shadow: 0 1px 2px #000, 0 0 3px #000; pointer-events: none; }
+.sprite-radio { background-image: url('/digipi/aprs-symbols-128-0.png'); }
+.sprite-weather { background-image: url('/digipi/aprs-symbols-128-0.png'); }
+.sprite-message { background-image: url('/digipi/aprs-symbols-128-0.png'); }
 .callsign { margin-top: 18px; color: #e5a93d; font-size: clamp(34px, 5vw, 72px); line-height: .96; font-weight: 600; letter-spacing: -.06em; }
 .identity .callsign { margin-top: 0; }
 .route { margin-top: 18px; color: #84a09e; font: 14px 'DM Mono', monospace; }
@@ -56,7 +58,8 @@ h2 { margin: 0; color: #9db2ad; font: 12px 'DM Mono', monospace; letter-spacing:
 .section-heading button { border: 0; border-bottom: 1px solid #64817f; padding: 3px 0; background: transparent; color: #b8d2c7; cursor: pointer; font: 11px 'DM Mono', monospace; }
 .traffic-list { border-top: 1px solid #1d3338; }
 .traffic-row { display: grid; grid-template-columns: 34px 82px 130px 22px 120px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #1d3338; color: #76918e; font: 12px 'DM Mono', monospace; }
-.mini-symbol { width: 28px; height: 28px; flex-basis: 28px; background-size: 448px 168px; }
+.mini-symbol { width: 28px; height: 28px; flex-basis: 28px; background-size: 448px 168px; background-position: calc(var(--sprite-column, 0) * -28px) calc(var(--sprite-row, 0) * -28px); }
+.mini-symbol[data-overlay]::after { font-size: 11px; }
 .traffic-row.selected { border-left: 2px solid #e5a93d; padding-left: 10px; background: #102127; color: #c6d8d1; }
 .traffic-row strong { color: #e5a93d; font-weight: 500; }
 .traffic-row p { overflow: hidden; margin: 0; color: #abc1bb; text-overflow: ellipsis; white-space: nowrap; }

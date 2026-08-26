@@ -45,10 +45,17 @@ function spriteStyle(message) {
   if (!message?.symbol || message.symbol.length < 2) return {}
   const index = message.symbol.charCodeAt(1) - 33
   if (index < 0 || index > 95) return {}
+  // APRS table: '/' is primary, '\\' is alternate, and alphanumeric tables are overlays.
   const sheet = message.symbol[0] === '\\' ? 1 : 0
   const column = index % 16
   const row = Math.floor(index / 16)
   return { '--sprite-column': column, '--sprite-row': row, backgroundImage: `url('/digipi/aprs-symbols-128-${sheet}.png')` }
+}
+
+function spriteOverlay(message) {
+  if (!message?.symbol || message.symbol.length < 2) return undefined
+  const table = message.symbol[0]
+  return /^[0-9A-Za-z]$/.test(table) ? table.toUpperCase() : undefined
 }
 
 function connect() {
@@ -80,7 +87,7 @@ onUnmounted(() => source?.close())
       <div class="hero-meta"><span>INCOMING MESSAGE</span><time>{{ formatTime(latest.received) }}</time></div>
       <div class="hero-grid">
         <div class="message-reading">
-          <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
+          <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
           <p v-if="latest.kind !== 'weather'" class="payload">{{ latest.payload }}</p>
           <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
           <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <a :href="locatorURL(latest.position.locator)" target="_blank" rel="noreferrer">{{ latest.position.locator }}</a> <span aria-hidden="true">-</span> <a :href="mapURL(latest.source)" target="_blank" rel="noreferrer">show map</a></div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
@@ -116,7 +123,7 @@ onUnmounted(() => source?.close())
       <div class="section-heading"><h2>Recent traffic</h2><button @click="expanded = !expanded">{{ expanded ? 'Collapse' : 'Show all' }}</button></div>
       <div v-if="visibleHistory.length" class="traffic-list">
         <article v-for="message in visibleHistory" :key="message.id" class="traffic-row" :class="{ selected: latest?.id === message.id }">
-          <span class="mini-symbol aprs-symbol" :class="spriteClass(message)" :style="spriteStyle(message)" aria-hidden="true"></span>
+          <span class="mini-symbol aprs-symbol" :class="spriteClass(message)" :style="spriteStyle(message)" :data-overlay="spriteOverlay(message)" aria-hidden="true"></span>
           <time>{{ formatTime(message.received) }}</time>
           <strong>{{ message.source }}</strong>
           <span class="arrow">→</span>
