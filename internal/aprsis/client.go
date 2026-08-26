@@ -157,3 +157,21 @@ func (c *Client) Send(packet string) error {
 	}
 	return err
 }
+
+func (c *Client) WaitReady(ctx context.Context) bool {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		c.mu.RLock()
+		ready := c.ready
+		c.mu.RUnlock()
+		if ready {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}

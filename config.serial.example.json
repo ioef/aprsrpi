@@ -15,7 +15,7 @@
   "aprsIs": {
     "enabled": true,
     "server": "rotate.aprs2.net:14580",
-    "callsign": "SV2JLD",
+    "callsign": "SV2JLD-2",
     "passcode": "YOUR_APRS_IS_PASSCODE",
     "filter": ""
   },

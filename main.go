@@ -88,6 +88,9 @@ func stationBeacon(ctx context.Context, client *aprsis.Client, station config.St
 		return
 	}
 	interval := time.Duration(station.BeaconMinutes) * time.Minute
+	if !client.WaitReady(ctx) {
+		return
+	}
 	send := func() {
 		payload := fmt.Sprintf("!%s%s%s%s%s", formatCoordinate(station.Latitude, true), station.SymbolTable, formatCoordinate(station.Longitude, false), station.SymbolCode, station.Comment)
 		message := aprs.Message{Source: station.Callsign, Destination: "APRS", Payload: payload}

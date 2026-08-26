@@ -100,11 +100,11 @@ func WithDefaults(value Config) Config {
 	if value.Bot.WeatherCity == "" {
 		value.Bot.WeatherCity = "Thessaloniki"
 	}
-	if value.APRSIS.Callsign == "" {
-		value.APRSIS.Callsign = value.Bot.Callsign
-	}
 	if value.Station.Callsign == "" {
-		value.Station.Callsign = value.APRSIS.Callsign
+		value.Station.Callsign = value.Bot.Callsign + "-2"
+	}
+	if value.APRSIS.Callsign == "" {
+		value.APRSIS.Callsign = value.Station.Callsign
 	}
 	if value.Station.SymbolTable == "" {
 		value.Station.SymbolTable = "/"
