@@ -43,7 +43,7 @@ install -d -o "$APP_USER" -g "$APP_USER" "$APP_ROOT"
 cp -a "$SOURCE_ROOT/web" "$APP_ROOT/"
 install -m 755 -o "$APP_USER" -g "$APP_USER" "$SOURCE_ROOT/aprsrpi" "$APP_ROOT/aprsrpi"
 
-install -d -m 750 "$CONFIG_DIR"
+install -d -m 755 "$CONFIG_DIR"
 if [[ ! -e "$CONFIG_DIR/config.json" ]]; then
   CONFIG_SOURCE="$SOURCE_ROOT/config.json"
   if [[ ! -e "$CONFIG_SOURCE" ]]; then
