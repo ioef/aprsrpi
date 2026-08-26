@@ -1,6 +1,8 @@
 {
   "httpAddress": ":8080",
   "webRoot": "/opt/aprsrpi/web/dist",
+  "logFile": "/var/log/aprsrpi/aprsrpi.log",
+  "logLevel": "info",
   "kiss": {
     "endpoint": "serial:///dev/ttyUSB0",
     "baud": 9600

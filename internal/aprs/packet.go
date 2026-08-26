@@ -20,7 +20,7 @@ func ParseTNC2(line string) (Message, bool) {
 	if len(addresses) == 0 || strings.TrimSpace(header[0]) == "" {
 		return Message{}, false
 	}
-	message := Message{Source: strings.TrimSpace(header[0]), Destination: strings.TrimSpace(addresses[0]), Path: strings.Join(addresses[1:], " > "), Payload: parts[1], Raw: line, Kind: "packet", Icon: "radio"}
+	message := Message{Source: strings.TrimSpace(header[0]), Destination: strings.TrimSpace(addresses[0]), Path: strings.Join(addresses[1:], " > "), Payload: CleanPayload([]byte(parts[1])), Raw: line, Kind: "packet", Icon: "radio"}
 	message.Weather = ParseWeather(message.Payload)
 	message.Position = ParsePosition(message.Payload)
 	if message.Position != nil {

@@ -17,6 +17,26 @@ function formatTime(value) {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value))
 }
 
+function formatCoordinate(value, latitude) {
+  const direction = latitude ? (value < 0 ? 'S' : 'N') : (value < 0 ? 'W' : 'E')
+  const absolute = Math.abs(value)
+  const degrees = Math.floor(absolute)
+  const minutes = (absolute - degrees) * 60
+  return `${degrees}°${minutes.toFixed(2)}' ${direction}`
+}
+
+function formatLocation(position) {
+  return `${formatCoordinate(position.latitude, true)} ${formatCoordinate(position.longitude, false)}`
+}
+
+function mapURL(source) {
+  return `https://aprs.fi/#!call=a%2F${encodeURIComponent(source)}`
+}
+
+function locatorURL(locator) {
+  return `https://aprs.fi/#!addr=${encodeURIComponent(locator)}`
+}
+
 function spriteClass(message) {
   return message?.kind === 'weather' ? 'sprite-weather' : message?.kind === 'message' ? 'sprite-message' : 'sprite-radio'
 }
@@ -56,11 +76,32 @@ onUnmounted(() => source?.close())
 
     <section v-if="latest" class="hero-message" aria-live="polite">
       <div class="hero-meta"><span>INCOMING MESSAGE</span><time>{{ formatTime(latest.received) }}</time></div>
-      <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
-      <p class="payload">{{ latest.payload }}</p>
-      <div v-if="latest.weather" class="weather-readout"><span>WX</span><strong v-if="latest.weather.temperatureC">{{ latest.weather.temperatureC.toFixed(1) }}°C</strong><span v-if="latest.weather.windDirection">{{ latest.weather.windDirection }}°</span><span v-if="latest.weather.windSpeedKnots">wind {{ latest.weather.windSpeedKnots }}kt</span><span v-if="latest.weather.gustKnots">gust {{ latest.weather.gustKnots }}kt</span><span v-if="latest.weather.humidity">humidity {{ latest.weather.humidity }}%</span><span v-if="latest.weather.pressureHpa">{{ latest.weather.pressureHpa.toFixed(1) }}hPa</span></div>
-      <div v-if="latest.position" class="position-readout">{{ latest.position.latitude.toFixed(5) }}, {{ latest.position.longitude.toFixed(5) }} <span>{{ latest.symbol }}</span></div>
-      <div class="packet-line"><span>PACKET {{ String(latest.id).padStart(4, '0') }}</span><span>FULL TEXT</span></div>
+      <div class="hero-grid">
+        <div class="message-reading">
+          <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
+          <p v-if="latest.kind !== 'weather'" class="payload">{{ latest.payload }}</p>
+          <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
+          <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <a :href="locatorURL(latest.position.locator)" target="_blank" rel="noreferrer">{{ latest.position.locator }}</a> <span aria-hidden="true">-</span> <a :href="mapURL(latest.source)" target="_blank" rel="noreferrer">show map</a></div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
+          <div class="packet-line"><span>PACKET {{ String(latest.id).padStart(4, '0') }}</span><span>{{ latest.type.toUpperCase() }}</span></div>
+        </div>
+        <aside class="weather-panel" v-if="latest.weather">
+          <div class="weather-title"><span>WX REPORT</span><span>APRS</span></div>
+          <div class="weather-grid">
+            <div v-if="latest.weather.temperatureC != null" class="weather-metric"><img src="/icons/thermometer.svg" alt=""><div><small>TEMP</small><strong>{{ latest.weather.temperatureC.toFixed(1) }}°C</strong></div></div>
+            <div v-if="latest.weather.pressureHpa != null" class="weather-metric"><img src="/icons/pressure.svg" alt=""><div><small>PRESSURE</small><strong>{{ latest.weather.pressureHpa.toFixed(1) }} hPa</strong></div></div>
+            <div v-if="latest.weather.humidity != null" class="weather-metric"><img src="/icons/humidity.svg" alt=""><div><small>HUMIDITY</small><strong>{{ latest.weather.humidity }}%</strong></div></div>
+            <div v-if="latest.weather.windSpeedKnots != null" class="weather-metric"><img src="/icons/wind.svg" alt=""><div><small>WIND</small><strong>{{ latest.weather.windSpeedKnots }} kt<span v-if="latest.weather.windDirection != null"> @ {{ latest.weather.windDirection }}°</span></strong></div></div>
+            <div v-if="latest.weather.gustKnots != null" class="weather-metric"><img src="/icons/wind.svg" alt=""><div><small>GUST</small><strong>{{ latest.weather.gustKnots }} kt</strong></div></div>
+            <div v-if="latest.weather.rainLastHourMm != null" class="weather-metric"><img src="/icons/rain.svg" alt=""><div><small>RAIN / 1H</small><strong>{{ latest.weather.rainLastHourMm.toFixed(1) }} mm</strong></div></div>
+            <div v-if="latest.weather.rain24HoursMm != null" class="weather-metric"><img src="/icons/rain.svg" alt=""><div><small>RAIN / 24H</small><strong>{{ latest.weather.rain24HoursMm.toFixed(1) }} mm</strong></div></div>
+          </div>
+        </aside>
+        <aside v-else class="packet-panel">
+          <small>PACKET TYPE</small><strong>{{ latest.type.toUpperCase() }}</strong>
+          <small>DESTINATION</small><strong>{{ latest.destination }}</strong>
+          <small>PATH</small><strong>{{ latest.path || 'DIRECT' }}</strong>
+        </aside>
+      </div>
     </section>
 
     <section v-else class="empty-state">

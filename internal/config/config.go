@@ -9,6 +9,8 @@ import (
 type Config struct {
 	HTTPAddress string           `json:"httpAddress"`
 	WebRoot     string           `json:"webRoot"`
+	LogFile     string           `json:"logFile"`
+	LogLevel    string           `json:"logLevel"`
 	KISS        KISSConfig       `json:"kiss"`
 	Bot         BotConfig        `json:"bot"`
 	APRSIS      APRSISConfig     `json:"aprsIs"`
@@ -72,6 +74,9 @@ func WithDefaults(value Config) Config {
 	}
 	if value.WebRoot == "" {
 		value.WebRoot = "web/dist"
+	}
+	if value.LogFile == "" {
+		value.LogFile = "/var/log/aprsrpi/aprsrpi.log"
 	}
 	if value.KISS.Endpoint == "" {
 		value.KISS.Endpoint = "tcp://127.0.0.1:8001"

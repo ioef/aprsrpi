@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 type Message struct {
@@ -33,6 +35,10 @@ type Position struct {
 	Longitude   float64 `json:"longitude"`
 	SymbolTable string  `json:"symbolTable"`
 	SymbolCode  string  `json:"symbolCode"`
+	Comment     string  `json:"comment,omitempty"`
+	PHG         string  `json:"phg,omitempty"`
+	URL         string  `json:"url,omitempty"`
+	Locator     string  `json:"locator,omitempty"`
 }
 
 type Telemetry struct {
@@ -50,6 +56,8 @@ type Weather struct {
 	GustKnots      *int     `json:"gustKnots,omitempty"`
 	RainLastHour   *int     `json:"rainLastHour,omitempty"`
 	Rain24Hours    *int     `json:"rain24Hours,omitempty"`
+	RainLastHourMm *float64 `json:"rainLastHourMm,omitempty"`
+	Rain24HoursMm  *float64 `json:"rain24HoursMm,omitempty"`
 	PressureHpa    *float64 `json:"pressureHpa,omitempty"`
 	WindDirection  *int     `json:"windDirection,omitempty"`
 	WindSpeedKnots *int     `json:"windSpeedKnots,omitempty"`
@@ -102,7 +110,7 @@ func (d *Decoder) Next() ([]byte, error) {
 }
 
 func Parse(frame []byte) (Message, bool) {
-	if len(frame) < 16 || frame[0] != 0 {
+	if len(frame) < 16 || frame[0]&0x0f != 0 {
 		return Message{}, false
 	}
 	addresses := []string{}
@@ -115,10 +123,10 @@ func Parse(frame []byte) (Message, bool) {
 			break
 		}
 	}
-	if len(addresses) < 2 || offset+2 > len(frame) {
+	if len(addresses) < 2 || offset+2 > len(frame) || frame[offset] != 0x03 || frame[offset+1] != 0xf0 {
 		return Message{}, false
 	}
-	payload := strings.TrimSpace(string(frame[offset+2:]))
+	payload := CleanPayload(frame[offset+2:])
 	if payload == "" {
 		return Message{}, false
 	}
@@ -140,6 +148,20 @@ func Parse(frame []byte) (Message, bool) {
 	return message, true
 }
 
+// CleanPayload keeps APRS text readable while removing TNC line noise and invalid UTF-8.
+func CleanPayload(payload []byte) string {
+	text := strings.ToValidUTF8(string(payload), "�")
+	text = strings.ReplaceAll(text, "\r", "")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.TrimSpace(text)
+	return strings.Map(func(char rune) rune {
+		if char == '\t' || char == '�' || utf8.ValidRune(char) && unicode.IsPrint(char) {
+			return char
+		}
+		return '�'
+	}, text)
+}
+
 func ParsePosition(payload string) *Position {
 	if strings.HasPrefix(payload, ";") && len(payload) >= 37 {
 		return ParsePosition(payload[18:])
@@ -147,53 +169,93 @@ func ParsePosition(payload string) *Position {
 	if strings.HasPrefix(payload, ")") && len(payload) >= 30 {
 		return ParsePosition(payload[10:])
 	}
-	start := 0
-	if payload[0] == '!' || payload[0] == '=' || payload[0] == '/' || payload[0] == '@' {
-		start = 1
-		if payload[0] == '/' || payload[0] == '@' {
-			start = 8
-		}
-	}
-	if len(payload) < start+19 {
-		if len(payload) < start+10 {
-			return nil
-		}
-	}
-	value := payload[start:]
-	if value[0] != '/' && value[0] != '\\' {
+	start := positionStart(payload)
+	if start < 0 || len(payload) < start+10 {
 		return nil
 	}
-	if len(value) >= 10 && isBase91(value[1:9]) {
+	value := payload[start:]
+	if len(value) >= 10 && (value[0] == '/' || value[0] == '\\') && isBase91(value[1:9]) {
 		y := base91(value[1:5])
 		x := base91(value[5:9])
 		lat := 90 - float64(y)/380926
 		lon := -180 + float64(x)/190463
-		return &Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9])}
+		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9])}, value[10:])
 	}
 	if len(value) < 19 {
 		return nil
 	}
-	lat, ok := coordinate(value[1:8], true)
+	lat, ok := coordinate(value[0:7], true)
 	if !ok {
 		return nil
 	}
-	if value[8] != 'N' && value[8] != 'S' {
+	if value[7] != 'N' && value[7] != 'S' {
 		return nil
 	}
-	lon, ok := coordinate(value[10:18], false)
+	lon, ok := coordinate(value[9:17], false)
 	if !ok {
 		return nil
 	}
-	if value[18] != 'E' && value[18] != 'W' {
+	if value[17] != 'E' && value[17] != 'W' {
 		return nil
 	}
-	if value[8] == 'S' {
+	if value[7] == 'S' {
 		lat = -lat
 	}
-	if value[18] == 'W' {
+	if value[17] == 'W' {
 		lon = -lon
 	}
-	return &Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9])}
+	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[8]), SymbolCode: string(value[18])}, value[19:])
+}
+
+func positionMetadata(position *Position, comment string) *Position {
+	position.Comment = strings.TrimSpace(comment)
+	position.Locator = maidenhead(position.Latitude, position.Longitude)
+	if strings.HasPrefix(position.Comment, "#PHG") && len(position.Comment) >= 8 {
+		position.PHG = position.Comment[1:8]
+		position.Comment = strings.TrimSpace(position.Comment[8:])
+	}
+	lower := strings.ToLower(position.Comment)
+	for _, scheme := range []string{"http://", "https://"} {
+		if start := strings.Index(lower, scheme); start >= 0 {
+			position.URL = strings.TrimSpace(position.Comment[start:])
+			position.Comment = strings.TrimSpace(position.Comment[:start])
+			break
+		}
+	}
+	return position
+}
+
+func maidenhead(latitude, longitude float64) string {
+	if latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 {
+		return ""
+	}
+	longitude += 180
+	latitude += 90
+	fieldLon, fieldLat := int(longitude/20), int(latitude/10)
+	longitude -= float64(fieldLon * 20)
+	latitude -= float64(fieldLat * 10)
+	squareLon, squareLat := int(longitude/2), int(latitude)
+	longitude -= float64(squareLon * 2)
+	latitude -= float64(squareLat)
+	subLon, subLat := int(longitude*12), int(latitude*24)
+	return string([]byte{'A' + byte(fieldLon), 'A' + byte(fieldLat), '0' + byte(squareLon), '0' + byte(squareLat), 'A' + byte(subLon), 'A' + byte(subLat)})
+}
+
+func positionStart(payload string) int {
+	if payload == "" {
+		return -1
+	}
+	switch payload[0] {
+	case '!', '=':
+		return 1
+	case '/', '@':
+		if len(payload) < 8 {
+			return -1
+		}
+		return 8
+	default:
+		return 0
+	}
 }
 
 func isBase91(value string) bool {
@@ -290,6 +352,7 @@ var weatherPatterns = map[string]*regexp.Regexp{
 	"temperature": regexp.MustCompile(`(?i)t(-?\d{3})`),
 	"direction":   regexp.MustCompile(`(?i)d(\d{3})`),
 	"speed":       regexp.MustCompile(`(?i)s(\d{3})`),
+	"windSlash":   regexp.MustCompile(`(\d{3})/(\d{3})`),
 	"gust":        regexp.MustCompile(`(?i)g(\d{3})`),
 	"rainHour":    regexp.MustCompile(`(?i)r(\d{3})`),
 	"rain24":      regexp.MustCompile(`(?i)p(\d{3})`),
@@ -304,6 +367,14 @@ func ParseWeather(payload string) *Weather {
 		value, _ := strconv.ParseFloat(match[1], 64)
 		value = (value - 32) * 5 / 9
 		weather.TemperatureC = &value
+		found = true
+	}
+	if match := weatherPatterns["windSlash"].FindStringSubmatch(payload); len(match) == 3 {
+		direction, _ := strconv.Atoi(match[1])
+		speed, _ := strconv.Atoi(match[2])
+		weather.WindDirection = &direction
+		weather.WindSpeedKnots = &speed
+		weather.WindKnots = &speed
 		found = true
 	}
 	for name, pattern := range weatherPatterns {
@@ -322,8 +393,12 @@ func ParseWeather(payload string) *Weather {
 				weather.GustKnots = &value
 			case "rainHour":
 				weather.RainLastHour = &value
+				millimeters := float64(value) * 0.254
+				weather.RainLastHourMm = &millimeters
 			case "rain24":
 				weather.Rain24Hours = &value
+				millimeters := float64(value) * 0.254
+				weather.Rain24HoursMm = &millimeters
 			case "humidity":
 				weather.Humidity = &value
 			case "pressure":

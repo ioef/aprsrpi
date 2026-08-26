@@ -5,11 +5,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
+
+	"aprsrpi/internal/logging"
 )
 
 type Config struct {
@@ -35,7 +36,7 @@ func (c *Client) Run(ctx context.Context, receive func(string)) {
 	}
 	for {
 		if err := c.session(ctx, receive); err != nil && ctx.Err() == nil {
-			log.Printf("APRS-IS: %v", err)
+			logging.Warnf("APRS-IS connection: %v", err)
 		}
 		if ctx.Err() != nil {
 			return
@@ -53,6 +54,7 @@ func (c *Client) session(ctx context.Context, receive func(string)) error {
 	if err != nil {
 		return err
 	}
+	logging.Infof("aprs-is connected server=%s", c.config.Server)
 	c.mu.Lock()
 	c.connection = connection
 	c.ready = false
@@ -79,6 +81,7 @@ func (c *Client) session(ctx context.Context, receive func(string)) error {
 	if c.config.Filter != "" {
 		login += " filter " + c.config.Filter
 	}
+	logging.Infof("aprs-is login callsign=%s filter=%q", c.config.Callsign, c.config.Filter)
 	if _, err := fmt.Fprintln(connection, login); err != nil {
 		return err
 	}
@@ -92,6 +95,7 @@ func (c *Client) session(ctx context.Context, receive func(string)) error {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "# logresp") {
 			if !strings.Contains(strings.ToLower(line), "verified") {
+				logging.Errorf("aprs-is login rejected response=%q", line)
 				return fmt.Errorf("APRS-IS login was not verified: %s", line)
 			}
 			c.mu.Lock()
@@ -99,6 +103,7 @@ func (c *Client) session(ctx context.Context, receive func(string)) error {
 				c.ready = true
 			}
 			c.mu.Unlock()
+			logging.Infof("aprs-is login verified callsign=%s", c.config.Callsign)
 			if !heartbeatStarted {
 				_ = connection.SetReadDeadline(time.Time{})
 				go c.heartbeat(connection, stopHeartbeat)
@@ -144,5 +149,10 @@ func (c *Client) Send(packet string) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	_, err := io.WriteString(connection, packet+"\r\n")
+	if err != nil {
+		logging.Warnf("aprs-is send failed: %v", err)
+	} else {
+		logging.Infof("aprs-is send packet=%q", packet)
+	}
 	return err
 }

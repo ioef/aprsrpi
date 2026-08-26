@@ -22,12 +22,18 @@ import (
 	"aprsrpi/internal/config"
 	"aprsrpi/internal/filter"
 	"aprsrpi/internal/gateway"
+	"aprsrpi/internal/logging"
 	"aprsrpi/internal/policy"
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	settings := loadConfig()
+	closeLog, err := logging.SetupWithLevel(settings.LogFile, settings.LogLevel)
+	if err != nil {
+		log.Fatalf("configure logging: %v", err)
+	}
+	defer closeLog()
 	hub := gateway.NewHub()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -39,13 +45,20 @@ func main() {
 	heard := policy.NewHeard(time.Duration(settings.IGate.HeardTimeoutMinutes) * time.Minute)
 	isClient := aprsis.New(aprsis.Config{Enabled: settings.APRSIS.Enabled, Server: settings.APRSIS.Server, Callsign: settings.APRSIS.Callsign, Passcode: settings.APRSIS.Passcode, Filter: settings.APRSIS.Filter})
 	go isClient.Run(ctx, func(line string) {
+		logging.Debugf("aprs-is raw=%q", line)
 		if message, ok := aprs.ParseTNC2(line); ok {
 			hub.Publish(message)
+			logging.Infof("aprs-is receive source=%s destination=%s type=%s payload=%q", message.Source, message.Destination, message.Type, message.Payload)
+			logging.Debugf("aprs-is parsed source=%q destination=%q path=%q payload=%q position=%+v weather=%+v telemetry=%+v", message.Source, message.Destination, message.Path, message.Payload, message.Position, message.Weather, message.Telemetry)
 			if settings.IGate.Enabled && policy.AllowInternetMessage(message, heard, settings.IGate.MessageGate) && limiter.Allow("is-to-rf", time.Minute/6) && windowLimiter.Allow("is-to-rf-minute", settings.IGate.MaxPerMinute, time.Minute) && windowLimiter.Allow("is-to-rf-five-minute", settings.IGate.MaxPerFiveMinutes, 5*time.Minute) {
 				gated := aprs.Message{Source: settings.APRSIS.Callsign, Destination: "APRS", Payload: "}" + aprs.TNC2(message)}
 				if err := radio.Send(aprs.EncodePacket(gated)); err != nil {
-					log.Printf("internet-to-RF gate: %v", err)
+					logging.Warnf("internet-to-RF gate failed: %v", err)
+				} else {
+					logging.Infof("internet-to-RF gate sent source=%s destination=%s", message.Source, message.Destination)
 				}
+			} else {
+				logging.Debugf("internet packet not gated source=%s destination=%s type=%s", message.Source, message.Destination, message.Type)
 			}
 		}
 	})
@@ -75,7 +88,7 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 		}
 		device, err := openKISS(settings.KISS.Endpoint, settings.KISS.Baud)
 		if err != nil {
-			log.Printf("KISS connection failed: %v", err)
+			logging.Errorf("KISS connection failed: %v", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -89,23 +102,34 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 				break
 			}
 			if message, ok := aprs.Parse(frame); ok {
+				logging.Debugf("rf raw_kiss_frame=%x", frame)
 				hub.Publish(message)
+				logging.Infof("rf receive source=%s destination=%s type=%s payload=%q", message.Source, message.Destination, message.Type, message.Payload)
+				logging.Debugf("rf parsed source=%q destination=%q path=%q payload=%q position=%+v weather=%+v telemetry=%+v", message.Source, message.Destination, message.Path, message.Payload, message.Position, message.Weather, message.Telemetry)
 				heard.Mark(message.Source)
 				fingerprint := message.Source + "|" + message.Destination + "|" + message.Payload
-				if settings.APRSIS.Enabled && filter.Match(settings.IGate.RFFilter, message) && !seenRF.Seen(fingerprint) {
-					if err := isClient.Send(rfUpload(message, settings.APRSIS.Callsign)); err != nil {
-						log.Printf("RF-to-Internet gate: %v", err)
+				rfDuplicate := seenRF.Seen(fingerprint)
+				if settings.APRSIS.Enabled && filter.Match(settings.IGate.RFFilter, message) && !rfDuplicate {
+					packet := rfUpload(message, settings.APRSIS.Callsign)
+					if err := isClient.Send(packet); err != nil {
+						logging.Warnf("rf-to-aprs-is failed source=%s destination=%s: %v", message.Source, message.Destination, err)
+					} else {
+						logging.Infof("rf-to-aprs-is sent source=%s destination=%s", message.Source, message.Destination)
 					}
+				} else {
+					logging.Debugf("RF packet not uploaded enabled=%t filter=%q duplicate=%t", settings.APRSIS.Enabled, settings.IGate.RFFilter, rfDuplicate)
 				}
 				if settings.Digipeater.Enabled && !seenDigi.Seen(fingerprint) && limiter.Allow("rf-digi", time.Duration(settings.Digipeater.RateLimitSeconds)*time.Second) && windowLimiter.Allow("rf-digi-minute", settings.Digipeater.MaxPerMinute, time.Minute) && windowLimiter.Allow("rf-digi-five-minute", settings.Digipeater.MaxPerFiveMinutes, 5*time.Minute) {
 					if repeated, ok := aprs.Digipeat(frame, settings.Digipeater.Callsign, settings.Digipeater.Aliases, settings.Digipeater.MaxHops); ok {
 						if err := radio.Send(repeated); err != nil {
-							log.Printf("digipeater transmit: %v", err)
+							logging.Warnf("digipeater transmit failed: %v", err)
+						} else {
+							logging.Infof("digipeater transmit source=%s", message.Source)
 						}
 					}
 				}
 				if err := bot.Handle(radio, message, bot.Config{Callsign: settings.Bot.Callsign, Location: settings.Bot.Location, WeatherCity: settings.Bot.WeatherCity, Repeaters: settings.Bot.Repeaters, Sunrise: settings.Bot.Sunrise, Sunset: settings.Bot.Sunset, OpenWeatherAPIKey: settings.Bot.OpenWeatherAPIKey}); err != nil {
-					log.Printf("bot reply failed: %v", err)
+					logging.Warnf("bot reply failed: %v", err)
 				}
 			}
 		}
@@ -134,6 +158,7 @@ func (r *radioWriter) Send(frame []byte) error {
 	if r.device == nil {
 		return fmt.Errorf("radio is not connected")
 	}
+	logging.Debugf("kiss tx frame=%x", frame)
 	_, err := r.device.Write(frame)
 	return err
 }
@@ -143,6 +168,7 @@ func (r *radioWriter) Write(frame []byte) (int, error) {
 	if r.device == nil {
 		return 0, fmt.Errorf("radio is not connected")
 	}
+	logging.Debugf("kiss tx frame=%x", frame)
 	return r.device.Write(frame)
 }
 
@@ -168,7 +194,14 @@ func loadConfig() config.Config {
 		}
 		log.Printf("config not found at %s; using defaults", path)
 	}
-	return config.WithDefaults(settings)
+	settings = config.WithDefaults(settings)
+	if value := os.Getenv("APRSRPI_LOG_LEVEL"); value != "" {
+		settings.LogLevel = value
+	}
+	if value := os.Getenv("APRSRPI_LOG_FILE"); value != "" {
+		settings.LogFile = value
+	}
+	return settings
 }
 func env(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {

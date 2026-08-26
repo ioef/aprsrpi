@@ -26,6 +26,17 @@ func TestMatchCommonFilterFamilies(t *testing.T) {
 	if Match("!t/m", message) {
 		t.Fatal("negated filter matched")
 	}
+	message.Symbol = "/A"
+	if !Match("s/a", message) {
+		t.Fatal("symbol filter did not match")
+	}
+	message.Path = "qAR > IGATE"
+	if !Match("q/qAR", message) {
+		t.Fatal("q construct filter did not match")
+	}
+	if Match("q/qAO", message) {
+		t.Fatal("wrong q construct matched")
+	}
 }
 
 func TestMatchRadiusFilter(t *testing.T) {

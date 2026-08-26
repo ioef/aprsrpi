@@ -1,6 +1,8 @@
 {
   "httpAddress": ":8080",
   "webRoot": "/opt/aprsrpi/web/dist",
+  "logFile": "/var/log/aprsrpi/aprsrpi.log",
+  "logLevel": "info",
   "kiss": {
     "endpoint": "bluetooth:///dev/rfcomm0",
     "baud": 9600

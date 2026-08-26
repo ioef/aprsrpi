@@ -113,3 +113,29 @@ func TestParseStandardWeather(t *testing.T) {
 		t.Fatalf("incomplete weather: %+v", weather)
 	}
 }
+
+func TestCleanPayloadKeepsMessageTextReadable(t *testing.T) {
+	got := CleanPayload([]byte(":SV2JLD   :hello\r\n\xffworld"))
+	if got != ":SV2JLD   :hello �world" {
+		t.Fatalf("cleaned payload = %q", got)
+	}
+}
+
+func TestParseTimestampedWeatherPackets(t *testing.T) {
+	packets := []string{
+		"SV2JU-2>APAGW,WIDE2-2,qAO,SV2HNH:@261626z4034.78N/02300.72E_245/004g008t089r000p000P000h19b10120 AGWTracker",
+		"CW8081>APRS,TCPXX*,qAX,CWOP-3:@260601z4033.98N/02258.47E_000/000g000t079r000p000P000b10118h68L274.WD 31",
+	}
+	for _, packet := range packets {
+		message, ok := ParseTNC2(packet)
+		if !ok || message.Position == nil || message.Weather == nil {
+			t.Fatalf("packet not decoded: %+v", message)
+		}
+		if message.Weather.TemperatureC == nil || message.Weather.PressureHpa == nil || message.Weather.Humidity == nil || message.Weather.WindSpeedKnots == nil {
+			t.Fatalf("weather incomplete: %+v", message.Weather)
+		}
+		if message.Kind != "weather" || message.Type != "position" {
+			t.Fatalf("classification = kind=%s type=%s", message.Kind, message.Type)
+		}
+	}
+}

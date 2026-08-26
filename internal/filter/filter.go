@@ -53,11 +53,31 @@ func matchTerm(term string, message aprs.Message) bool {
 		return callsignList(term[1:], message.Destination)
 	case 'r', 'g':
 		return radiusTerm(term[1:], message)
+	case 's':
+		return len(term) > 1 && message.Symbol != "" && strings.Contains(term[1:], strings.ToLower(message.Symbol))
+	case 'o':
+		return message.Type == "object" || message.Type == "item"
 	case 'q':
-		return true
+		return qConstruct(term[1:], message.Path)
 	default:
 		return false
 	}
+}
+
+func qConstruct(value, path string) bool {
+	value = strings.TrimPrefix(value, "/")
+	if value == "" {
+		return false
+	}
+	for _, item := range strings.Split(value, "/") {
+		if strings.EqualFold(strings.TrimSpace(item), "any") {
+			return true
+		}
+		if strings.Contains(strings.ToLower(path), strings.ToLower(strings.TrimSpace(item))) {
+			return true
+		}
+	}
+	return false
 }
 
 func messageType(message aprs.Message) string {

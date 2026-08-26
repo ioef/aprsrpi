@@ -40,6 +40,7 @@ go build -o "$SOURCE_ROOT/aprsrpi" .
 
 echo "Installing application into $APP_ROOT..."
 install -d -o "$APP_USER" -g "$APP_USER" "$APP_ROOT"
+install -d -o "$APP_USER" -g "$APP_USER" /var/log/aprsrpi
 cp -a "$SOURCE_ROOT/web" "$APP_ROOT/"
 install -m 755 -o "$APP_USER" -g "$APP_USER" "$SOURCE_ROOT/aprsrpi" "$APP_ROOT/aprsrpi"
 

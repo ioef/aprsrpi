@@ -41,6 +41,40 @@ sudoedit /etc/aprsrpi/config.json
 
 Put the OpenWeather API key in `bot.openWeatherApiKey`. In native mode, APRS-IS credentials belong in `aprsIs.callsign` and `aprsIs.passcode`. Protect the JSON file because it may contain credentials. To use another location, set `APRSRPI_CONFIG=/path/to/config.json`.
 
+Logs are written to `logFile` and also remain visible in the service journal. The native template uses `/var/log/aprsrpi/aprsrpi.log`. Set `logLevel` to `debug` when troubleshooting:
+
+```json
+"logLevel": "debug"
+```
+
+The service can override the JSON values without modifying the configuration:
+
+```sh
+sudo systemctl edit aprsrpi
+```
+
+Add:
+
+```ini
+[Service]
+Environment=APRSRPI_LOG_LEVEL=debug
+Environment=APRSRPI_LOG_FILE=/var/log/aprsrpi/debug.log
+```
+
+Then reload and restart:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl restart aprsrpi
+```
+
+`APRSRPI_LOG_LEVEL` accepts `debug` or any other value for normal INFO-level logging. `APRSRPI_LOG_FILE` changes the output file path. Inspect the logs with:
+
+```sh
+sudo tail -f /var/log/aprsrpi/aprsrpi.log
+journalctl -u aprsrpi -f
+```
+
 ## KISS configuration
 
 The JSON configuration is the source of truth for the native KISS endpoint:
