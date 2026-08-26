@@ -14,6 +14,7 @@ type Config struct {
 	KISS        KISSConfig       `json:"kiss"`
 	Bot         BotConfig        `json:"bot"`
 	APRSIS      APRSISConfig     `json:"aprsIs"`
+	Station     StationConfig    `json:"station"`
 	IGate       IGateConfig      `json:"igate"`
 	Digipeater  DigipeaterConfig `json:"digipeater"`
 }
@@ -23,6 +24,15 @@ type APRSISConfig struct {
 	Callsign string `json:"callsign"`
 	Passcode string `json:"passcode"`
 	Filter   string `json:"filter"`
+}
+type StationConfig struct {
+	Callsign      string  `json:"callsign"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
+	SymbolTable   string  `json:"symbolTable"`
+	SymbolCode    string  `json:"symbolCode"`
+	Comment       string  `json:"comment"`
+	BeaconMinutes int     `json:"beaconMinutes"`
 }
 type IGateConfig struct {
 	Enabled             bool   `json:"enabled"`
@@ -92,6 +102,18 @@ func WithDefaults(value Config) Config {
 	}
 	if value.APRSIS.Callsign == "" {
 		value.APRSIS.Callsign = value.Bot.Callsign
+	}
+	if value.Station.Callsign == "" {
+		value.Station.Callsign = value.APRSIS.Callsign
+	}
+	if value.Station.SymbolTable == "" {
+		value.Station.SymbolTable = "/"
+	}
+	if value.Station.SymbolCode == "" {
+		value.Station.SymbolCode = "&"
+	}
+	if value.Station.BeaconMinutes == 0 {
+		value.Station.BeaconMinutes = 30
 	}
 	if value.APRSIS.Passcode == "" {
 		value.APRSIS.Passcode = "-1"

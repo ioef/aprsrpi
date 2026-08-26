@@ -19,6 +19,15 @@
     "passcode": "YOUR_APRS_IS_PASSCODE",
     "filter": ""
   },
+  "station": {
+    "callsign": "SV2JLD-2",
+    "latitude": 40.6401,
+    "longitude": 22.9444,
+    "symbolTable": "\\",
+    "symbolCode": "&",
+    "comment": "APRS-IS iGate",
+    "beaconMinutes": 30
+  },
   "igate": {
     "enabled": true,
     "messageGate": true,

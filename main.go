@@ -44,6 +44,9 @@ func main() {
 	windowLimiter := policy.NewWindowLimiter()
 	heard := policy.NewHeard(time.Duration(settings.IGate.HeardTimeoutMinutes) * time.Minute)
 	isClient := aprsis.New(aprsis.Config{Enabled: settings.APRSIS.Enabled, Server: settings.APRSIS.Server, Callsign: settings.APRSIS.Callsign, Passcode: settings.APRSIS.Passcode, Filter: settings.APRSIS.Filter})
+	if settings.APRSIS.Enabled {
+		go stationBeacon(ctx, isClient, settings.Station)
+	}
 	go isClient.Run(ctx, func(line string) {
 		logging.Debugf("aprs-is raw=%q", line)
 		if message, ok := aprs.ParseTNC2(line); ok {
@@ -77,6 +80,55 @@ func main() {
 	address := settings.HTTPAddress
 	log.Printf("APRS kiosk listening on %s; KISS endpoint %s", address, settings.KISS.Endpoint)
 	log.Fatal(http.ListenAndServe(address, mux))
+}
+
+func stationBeacon(ctx context.Context, client *aprsis.Client, station config.StationConfig) {
+	if station.Latitude == 0 && station.Longitude == 0 {
+		logging.Warnf("station beacon disabled: latitude/longitude are not configured")
+		return
+	}
+	interval := time.Duration(station.BeaconMinutes) * time.Minute
+	send := func() {
+		payload := fmt.Sprintf("!%s%s%s%s%s", formatCoordinate(station.Latitude, true), station.SymbolTable, formatCoordinate(station.Longitude, false), station.SymbolCode, station.Comment)
+		message := aprs.Message{Source: station.Callsign, Destination: "APRS", Payload: payload}
+		if err := client.Send(aprs.TNC2(message)); err != nil {
+			logging.Warnf("station beacon failed callsign=%s: %v", station.Callsign, err)
+		} else {
+			logging.Infof("station beacon sent callsign=%s", station.Callsign)
+		}
+	}
+	send()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		send()
+	}
+}
+
+func formatCoordinate(value float64, latitude bool) string {
+	direction := "E"
+	if latitude {
+		direction = "N"
+	}
+	if value < 0 {
+		if latitude {
+			direction = "S"
+		} else {
+			direction = "W"
+		}
+		value = -value
+	}
+	degrees := int(value)
+	minutes := (value - float64(degrees)) * 60
+	if latitude {
+		return fmt.Sprintf("%02d%05.2f%s", degrees, minutes, direction)
+	}
+	return fmt.Sprintf("%03d%05.2f%s", degrees, minutes, direction)
 }
 
 func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, radio *radioWriter, isClient *aprsis.Client, seenRF, seenDigi *policy.Cache, limiter *policy.Limiter, windowLimiter *policy.WindowLimiter, heard *policy.Heard) {

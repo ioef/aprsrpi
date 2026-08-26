@@ -247,6 +247,8 @@ Native APRS-IS and digipeating settings are configured in the same JSON file:
 
 The `aprsIs.server` field accepts an APRS-IS hostname and port such as `rotate.aprs2.net:14580`. Set `aprsIs.callsign` and `aprsIs.passcode` to the station credentials, and use `aprsIs.filter` for the server-side APRS-IS filter. The `kiss.endpoint` field selects the connected TNC; use `serial://` for USB or `bluetooth://` for RFCOMM.
 
+The `station` section publishes a periodic position beacon for your own igate. Use the full SSID callsign you want visible on APRS.fi, such as `SV2JLD-2`, and set the symbol to `\\` plus `&` for an iGate-style symbol. The beacon is sent only after APRS-IS login verification.
+
 Install and start the application service:
 
 ```sh
