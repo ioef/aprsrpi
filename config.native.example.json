@@ -1,0 +1,41 @@
+{
+  "httpAddress": ":8080",
+  "webRoot": "/opt/aprsrpi/web/dist",
+  "kiss": {
+    "endpoint": "serial:///dev/ttyACM0",
+    "baud": 9600
+  },
+  "bot": {
+    "callsign": "SV2JLD",
+    "location": "Your location: 40.6401 N, 22.9444 E",
+    "weatherCity": "Thessaloniki",
+    "repeaters": "SV2A 145.750, SV2D 145.675 88.5Hz, SV2O 145.600 94.8Hz",
+    "sunrise": "06:45",
+    "sunset": "20:35",
+    "openWeatherApiKey": ""
+  },
+  "aprsIs": {
+    "enabled": true,
+    "server": "rotate.aprs2.net:14580",
+    "callsign": "SV2JLD",
+    "passcode": "YOUR_APRS_IS_PASSCODE",
+    "filter": ""
+  },
+  "igate": {
+    "enabled": true,
+    "messageGate": true,
+    "heardTimeoutMinutes": 30,
+    "rfFilter": "",
+    "maxPerMinute": 6,
+    "maxPerFiveMinutes": 20
+  },
+  "digipeater": {
+    "enabled": false,
+    "callsign": "SV2JLD",
+    "aliases": ["WIDE1-1", "WIDE2-1", "WIDE2-2"],
+    "maxHops": 2,
+    "rateLimitSeconds": 10,
+    "maxPerMinute": 20,
+    "maxPerFiveMinutes": 80
+  }
+}
