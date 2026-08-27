@@ -13,9 +13,10 @@ button { color: inherit; font: inherit; }
 .status.offline { color: #d28b71; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
 .hero-message { max-width: 1440px; padding: clamp(48px, 8vh, 110px) 0 clamp(58px, 9vh, 120px); animation: reveal .7s ease-out both; }
-.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 540px); gap: clamp(34px, 6vw, 96px); align-items: start; margin-top: 28px; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(360px, 440px); gap: clamp(30px, 4vw, 72px); align-items: start; margin-top: 28px; }
 .message-reading { min-width: 0; }
 .hero-meta { justify-content: space-between; color: #8caba8; font: 12px 'DM Mono', monospace; letter-spacing: .09em; }
+.hero-meta time { font-size: 16px; }
 .identity { display: flex; align-items: center; gap: 22px; margin-top: 18px; }
 .aprs-symbol { display: block; width: 68px; height: 68px; flex: 0 0 68px; background-repeat: no-repeat; background-size: 1088px 408px; background-position: calc(var(--sprite-column, 0) * -68px) calc(var(--sprite-row, 0) * -68px); image-rendering: auto; }
 .aprs-symbol[data-overlay] { position: relative; }
@@ -31,7 +32,7 @@ button { color: inherit; font: inherit; }
 .raw-label { display: block; margin-bottom: 6px; color: #526b69; font: 10px 'DM Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
 .payload { max-width: 900px; margin: 0; color: #7c948f; font: 13px 'DM Mono', monospace; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
 .weather-summary { margin: 34px 0 0; color: #8caba8; font: 14px 'DM Mono', monospace; letter-spacing: .06em; }
-.weather-panel, .packet-panel { border-left: 1px solid #294047; padding-left: 38px; }
+.weather-panel, .packet-panel { border-left: 1px solid #294047; padding-left: 28px; }
 .weather-title { display: flex; justify-content: space-between; color: #8caba8; font: 16px 'DM Mono', monospace; letter-spacing: .1em; }
 .weather-title span:last-child { color: #e5a93d; }
 .weather-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 24px; margin-top: 32px; }
