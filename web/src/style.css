@@ -32,7 +32,7 @@ button { color: inherit; font: inherit; }
 .raw-label { display: block; margin-bottom: 6px; color: #526b69; font: 10px 'DM Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
 .payload { max-width: 900px; margin: 0; color: #7c948f; font: 13px 'DM Mono', monospace; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
 .weather-summary { margin: 34px 0 0; color: #8caba8; font: 14px 'DM Mono', monospace; letter-spacing: .06em; }
-.weather-panel, .packet-panel { border-left: 1px solid #294047; padding-left: 28px; }
+.weather-panel, .packet-panel { margin-left: -12px; border-left: 1px solid #294047; padding-left: 20px; }
 .weather-title { display: flex; justify-content: space-between; color: #8caba8; font: 16px 'DM Mono', monospace; letter-spacing: .1em; }
 .weather-title span:last-child { color: #e5a93d; }
 .weather-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 24px; margin-top: 32px; }
