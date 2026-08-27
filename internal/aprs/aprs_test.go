@@ -2,6 +2,7 @@ package aprs
 
 import (
 	"bytes"
+	"math"
 	"testing"
 )
 
@@ -150,6 +151,26 @@ func TestParseTimestampedWeatherPackets(t *testing.T) {
 		if message.Kind != "weather" || message.Type != "position" {
 			t.Fatalf("classification = kind=%s type=%s", message.Kind, message.Type)
 		}
+	}
+}
+
+func TestParseMicEPositionFromRealPacket(t *testing.T) {
+	packet := "N1ZZN-9>T2SP0W:`c_Vm6hk/`\"49}Jeff Mobile_%"
+	message, ok := ParseTNC2(packet)
+	if !ok || message.Position == nil {
+		t.Fatal("Mic-E packet was not decoded")
+	}
+	if math.Abs(message.Position.Latitude-42.50116666666667) > 1e-9 {
+		t.Fatalf("latitude = %v", message.Position.Latitude)
+	}
+	if math.Abs(message.Position.Longitude+71.12633333333332) > 1e-9 {
+		t.Fatalf("longitude = %v", message.Position.Longitude)
+	}
+	if message.Position.SymbolTable != "/" || message.Position.SymbolCode != "k" {
+		t.Fatalf("symbol = %q%q", message.Position.SymbolTable, message.Position.SymbolCode)
+	}
+	if message.Position.Comment == "" || message.Position.Comment != "Jeff Mobile_%" && message.Position.Comment != "`\"49}Jeff Mobile_%" {
+		t.Fatalf("comment = %q", message.Position.Comment)
 	}
 }
 

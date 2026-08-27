@@ -131,7 +131,7 @@ func Parse(frame []byte) (Message, bool) {
 		return Message{}, false
 	}
 	message := Message{Received: time.Now().UTC().Format(time.RFC3339), Source: addresses[1], Destination: addresses[0], Path: strings.Join(addresses[2:], " > "), Payload: payload, Raw: string(frame), Kind: "packet", Icon: "radio"}
-	message.Position = ParsePosition(payload)
+	message.Position = ParsePosition(payload, addresses[0])
 	if message.Position != nil && message.Position.SymbolCode == "_" {
 		message.Weather = ParseWeather(payload)
 	}
@@ -164,7 +164,14 @@ func CleanPayload(payload []byte) string {
 	}, text)
 }
 
-func ParsePosition(payload string) *Position {
+func ParsePosition(payload string, destination ...string) *Position {
+	if len(payload) > 0 && (payload[0] == '`' || payload[0] == '\'') {
+		if len(destination) > 0 {
+			if pos := parseMicEPosition(destination[0], payload); pos != nil {
+				return pos
+			}
+		}
+	}
 	if strings.HasPrefix(payload, ";") && len(payload) >= 37 {
 		return ParsePosition(payload[18:])
 	}
@@ -210,6 +217,143 @@ func ParsePosition(payload string) *Position {
 		lon = -lon
 	}
 	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[8]), SymbolCode: string(value[18])}, value[19:])
+}
+
+func parseMicEPosition(destination, payload string) *Position {
+	if len(payload) < 10 || (payload[0] != '`' && payload[0] != '\'') {
+		return nil
+	}
+	dest := strings.ToUpper(strings.TrimSpace(destination))
+	if len(dest) < 6 {
+		return nil
+	}
+	dest = dest[:6]
+	lat, ok := decodeMicELatitude([]byte(dest))
+	if !ok {
+		return nil
+	}
+	lon, ok := decodeMicELongitude([]byte(dest), payload[1:4])
+	if !ok {
+		return nil
+	}
+	if len(payload) < 10 {
+		return nil
+	}
+	symbolCode := payload[7:8]
+	symbolTable := payload[8:9]
+	comment := strings.TrimSpace(payload[9:])
+	if comment == "" {
+		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode}, "")
+	}
+	if len(comment) > 0 && (comment[0] == '`' || comment[0] == '\'' || comment[0] == '>' || comment[0] == ']' || comment[0] == ' ' || comment[0] == '#' || comment[0] == '$' || comment[0] == '%' || comment[0] == '^' || comment[0] == '|' || comment[0] == '~' || comment[0] == '"') {
+		comment = comment[1:]
+	}
+	if len(comment) >= 4 && isMicEAltitude(comment[:4]) {
+		comment = comment[4:]
+	}
+	position := &Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode}
+	return positionMetadata(position, comment)
+}
+
+func isMicEAltitude(value string) bool {
+	if len(value) != 4 {
+		return false
+	}
+	return value[3] == '}' && value[0] >= '!' && value[0] <= '~' && value[1] >= '!' && value[1] <= '~' && value[2] >= '!' && value[2] <= '~'
+}
+
+func decodeMicELatitude(destination []byte) (float64, bool) {
+	if len(destination) < 6 {
+		return 0, false
+	}
+	value0, ok := micEDigit(destination[0])
+	if !ok {
+		return 0, false
+	}
+	value1, ok := micEDigit(destination[1])
+	if !ok {
+		return 0, false
+	}
+	value2, ok := micEDigit(destination[2])
+	if !ok {
+		return 0, false
+	}
+	value3, ok := micEDigit(destination[3])
+	if !ok {
+		return 0, false
+	}
+	value4, ok := micEDigit(destination[4])
+	if !ok {
+		return 0, false
+	}
+	value5, ok := micEDigit(destination[5])
+	if !ok {
+		return 0, false
+	}
+	lat := float64(value0*10+value1) + float64(value2*1000+value3*100+value4*10+value5)/6000.0
+	if destination[3] >= '0' && destination[3] <= '9' || destination[3] == 'L' {
+		lat = -lat
+	}
+	return lat, true
+}
+
+func decodeMicELongitude(destination []byte, info string) (float64, bool) {
+	if len(info) < 3 {
+		return 0, false
+	}
+	offset := 0
+	if destination[4] >= '0' && destination[4] <= '9' || destination[4] == 'L' {
+		offset = 0
+	} else if destination[4] >= 'P' && destination[4] <= 'Z' {
+		offset = 1
+	}
+	first := info[0]
+	var lon float64
+	switch {
+	case offset == 1 && first >= 118 && first <= 127:
+		lon = float64(first - 118)
+	case offset == 0 && first >= 38 && first <= 127:
+		lon = float64(first-38) + 10
+	case offset == 1 && first >= 108 && first <= 117:
+		lon = float64(first-108) + 100
+	case offset == 1 && first >= 38 && first <= 107:
+		lon = float64(first-38) + 110
+	default:
+		return 0, false
+	}
+	second := info[1]
+	switch {
+	case second >= 88 && second <= 97:
+		lon += float64(second-88) / 60.0
+	case second >= 38 && second <= 87:
+		lon += float64(second-38+10) / 60.0
+	default:
+		return 0, false
+	}
+	third := info[2]
+	if third < 28 || third > 127 {
+		return 0, false
+	}
+	lon += float64(third-28) / 6000.0
+	if destination[5] >= 'P' && destination[5] <= 'Z' {
+		lon = -lon
+	}
+	return lon, true
+}
+
+func micEDigit(ch byte) (int, bool) {
+	switch {
+	case ch >= '0' && ch <= '9':
+		return int(ch - '0'), true
+	case ch >= 'A' && ch <= 'J':
+		return int(ch - 'A'), true
+	case ch >= 'P' && ch <= 'Y':
+		return int(ch - 'P'), true
+	case ch == 'K' || ch == 'L' || ch == 'Z':
+		return 0, true
+	default:
+		return 0, false
+	}
 }
 
 func isSymbolTable(value byte) bool {
