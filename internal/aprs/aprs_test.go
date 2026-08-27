@@ -169,8 +169,11 @@ func TestParseMicEPositionFromRealPacket(t *testing.T) {
 	if message.Position.SymbolTable != "/" || message.Position.SymbolCode != "k" {
 		t.Fatalf("symbol = %q%q", message.Position.SymbolTable, message.Position.SymbolCode)
 	}
-	if message.Position.Comment == "" || message.Position.Comment != "Jeff Mobile_%" && message.Position.Comment != "`\"49}Jeff Mobile_%" {
+	if message.Position.Comment != "Jeff Mobile_%" {
 		t.Fatalf("comment = %q", message.Position.Comment)
+	}
+	if message.Position.MicEStatus == "" {
+		t.Fatal("Mic-E status was not decoded")
 	}
 }
 

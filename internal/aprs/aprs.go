@@ -39,6 +39,7 @@ type Position struct {
 	PHG         string  `json:"phg,omitempty"`
 	URL         string  `json:"url,omitempty"`
 	Locator     string  `json:"locator,omitempty"`
+	MicEStatus  string  `json:"micEStatus,omitempty"`
 }
 
 type Telemetry struct {
@@ -228,7 +229,7 @@ func parseMicEPosition(destination, payload string) *Position {
 		return nil
 	}
 	dest = dest[:6]
-	lat, ok := decodeMicELatitude([]byte(dest))
+	lat, status, ok := decodeMicELatitudeAndStatus([]byte(dest))
 	if !ok {
 		return nil
 	}
@@ -243,7 +244,7 @@ func parseMicEPosition(destination, payload string) *Position {
 	symbolTable := payload[8:9]
 	comment := strings.TrimSpace(payload[9:])
 	if comment == "" {
-		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode}, "")
+		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode, MicEStatus: status}, "")
 	}
 	if len(comment) > 0 && (comment[0] == '`' || comment[0] == '\'' || comment[0] == '>' || comment[0] == ']' || comment[0] == ' ' || comment[0] == '#' || comment[0] == '$' || comment[0] == '%' || comment[0] == '^' || comment[0] == '|' || comment[0] == '~' || comment[0] == '"') {
 		comment = comment[1:]
@@ -251,7 +252,7 @@ func parseMicEPosition(destination, payload string) *Position {
 	if len(comment) >= 4 && isMicEAltitude(comment[:4]) {
 		comment = comment[4:]
 	}
-	position := &Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode}
+	position := &Position{Latitude: lat, Longitude: lon, SymbolTable: symbolTable, SymbolCode: symbolCode, MicEStatus: status}
 	return positionMetadata(position, comment)
 }
 
@@ -262,39 +263,41 @@ func isMicEAltitude(value string) bool {
 	return value[3] == '}' && value[0] >= '!' && value[0] <= '~' && value[1] >= '!' && value[1] <= '~' && value[2] >= '!' && value[2] <= '~'
 }
 
-func decodeMicELatitude(destination []byte) (float64, bool) {
+func decodeMicELatitudeAndStatus(destination []byte) (float64, string, bool) {
 	if len(destination) < 6 {
-		return 0, false
+		return 0, "", false
 	}
-	value0, ok := micEDigit(destination[0])
+	stdMsg := 0
+	custMsg := 0
+	value0, ok := micEDigitWithFlags(destination[0], 4, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
-	value1, ok := micEDigit(destination[1])
+	value1, ok := micEDigitWithFlags(destination[1], 2, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
-	value2, ok := micEDigit(destination[2])
+	value2, ok := micEDigitWithFlags(destination[2], 1, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
-	value3, ok := micEDigit(destination[3])
+	value3, ok := micEDigitWithFlags(destination[3], 0, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
-	value4, ok := micEDigit(destination[4])
+	value4, ok := micEDigitWithFlags(destination[4], 0, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
-	value5, ok := micEDigit(destination[5])
+	value5, ok := micEDigitWithFlags(destination[5], 0, &stdMsg, &custMsg)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
 	lat := float64(value0*10+value1) + float64(value2*1000+value3*100+value4*10+value5)/6000.0
 	if destination[3] >= '0' && destination[3] <= '9' || destination[3] == 'L' {
 		lat = -lat
 	}
-	return lat, true
+	return lat, decodeMicEStatus(stdMsg, custMsg), true
 }
 
 func decodeMicELongitude(destination []byte, info string) (float64, bool) {
@@ -341,19 +344,42 @@ func decodeMicELongitude(destination []byte, info string) (float64, bool) {
 	return lon, true
 }
 
-func micEDigit(ch byte) (int, bool) {
+func micEDigitWithFlags(ch byte, mask int, stdMsg, custMsg *int) (int, bool) {
 	switch {
 	case ch >= '0' && ch <= '9':
 		return int(ch - '0'), true
 	case ch >= 'A' && ch <= 'J':
+		*custMsg |= mask
 		return int(ch - 'A'), true
 	case ch >= 'P' && ch <= 'Y':
+		*stdMsg |= mask
 		return int(ch - 'P'), true
-	case ch == 'K' || ch == 'L' || ch == 'Z':
+	case ch == 'K':
+		*custMsg |= mask
+		return 0, true
+	case ch == 'L':
+		return 0, true
+	case ch == 'Z':
+		*stdMsg |= mask
 		return 0, true
 	default:
 		return 0, false
 	}
+}
+
+func decodeMicEStatus(stdMsg, custMsg int) string {
+	stdText := []string{"Emergency", "Priority", "Special", "Committed", "Returning", "In Service", "En Route", "Off Duty"}
+	custText := []string{"Emergency", "Custom-6", "Custom-5", "Custom-4", "Custom-3", "Custom-2", "Custom-1", "Custom-0"}
+	if stdMsg == 0 && custMsg == 0 {
+		return "Emergency"
+	}
+	if stdMsg == 0 && custMsg != 0 {
+		return custText[custMsg]
+	}
+	if stdMsg != 0 && custMsg == 0 {
+		return stdText[stdMsg]
+	}
+	return "Unknown MIC-E Message Type"
 }
 
 func isSymbolTable(value byte) bool {
