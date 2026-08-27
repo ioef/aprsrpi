@@ -27,7 +27,9 @@ button { color: inherit; font: inherit; }
 .identity .callsign { margin-top: 0; }
 .route { margin-top: 18px; color: #84a09e; font: 14px 'DM Mono', monospace; }
 .identity .route { margin-top: 10px; }
-.payload { max-width: 980px; margin: 34px 0 0; color: #edf5f1; font-size: clamp(22px, 3vw, 46px); line-height: 1.15; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.payload-block { margin-top: 32px; }
+.raw-label { display: block; margin-bottom: 6px; color: #526b69; font: 10px 'DM Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.payload { max-width: 900px; margin: 0; color: #7c948f; font: 13px 'DM Mono', monospace; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
 .weather-summary { margin: 34px 0 0; color: #8caba8; font: 14px 'DM Mono', monospace; letter-spacing: .06em; }
 .weather-panel, .packet-panel { border-left: 1px solid #294047; padding-left: 38px; }
 .weather-title { display: flex; justify-content: space-between; color: #8caba8; font: 16px 'DM Mono', monospace; letter-spacing: .1em; }
@@ -37,15 +39,16 @@ button { color: inherit; font: inherit; }
 .weather-metric img { width: 72px; height: 72px; flex: 0 0 72px; }
 .weather-metric small, .packet-panel small { display: block; color: #64817f; font: 14px 'DM Mono', monospace; letter-spacing: .1em; }
 .weather-metric strong { display: block; margin-top: 7px; color: #edf5f1; font: 500 30px 'DM Mono', monospace; white-space: nowrap; }
-.packet-panel { display: grid; gap: 10px; color: #64817f; font: 15px 'DM Mono', monospace; }
-.packet-panel strong { margin-bottom: 18px; color: #c6d8d1; font-size: 22px; font-weight: 500; overflow-wrap: anywhere; }
-.position-readout { margin-top: 14px; color: #76918e; font: 12px 'DM Mono', monospace; }
-.position-readout span { margin-left: 12px; color: #e5a93d; }
-.position-readout strong { color: #9db2ad; font-weight: 500; }
-.location-links { margin-top: 9px; color: #64817f; }
+.packet-panel { display: grid; gap: 16px; color: #76918e; font: 17px 'DM Mono', monospace; }
+.packet-panel small { font-size: 15px; }
+.packet-panel strong { margin-bottom: 20px; color: #c6d8d1; font-size: 28px; font-weight: 500; overflow-wrap: anywhere; }
+.position-readout { margin-top: 32px; color: #edf5f1; font-size: clamp(24px, 3vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.position-readout strong { display: block; margin-bottom: 8px; color: #8caba8; font: 12px 'DM Mono', monospace; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
+.position-readout span { margin-left: 14px; color: #e5a93d; font-size: .5em; vertical-align: middle; }
+.location-links { margin-top: 12px; color: #84a09e; font: 14px 'DM Mono', monospace; letter-spacing: .02em; }
 .location-links span { margin: 0 8px; color: #496866; }
 .position-readout a { color: #b8d2c7; text-decoration: underline; text-underline-offset: 3px; }
-.position-comment { margin-top: 9px; color: #abc1bb; font: 14px 'Space Grotesk', sans-serif; letter-spacing: 0; overflow-wrap: anywhere; }
+.position-comment { margin-top: 14px; color: #edf5f1; font-size: clamp(19px, 2.2vw, 28px); font-weight: 400; letter-spacing: -.01em; line-height: 1.35; overflow-wrap: anywhere; }
 .packet-line { justify-content: space-between; max-width: 650px; margin-top: 42px; padding-top: 15px; border-top: 1px solid #294047; color: #64817f; font: 11px 'DM Mono', monospace; letter-spacing: .1em; }
 .empty-state { min-height: 52vh; display: grid; place-content: center; justify-items: center; color: #9db2ad; font: 13px 'DM Mono', monospace; letter-spacing: .09em; text-align: center; }
 .empty-state small { margin-top: 12px; color: #5d7876; font: 12px 'Space Grotesk', sans-serif; letter-spacing: 0; }

@@ -88,7 +88,7 @@ onUnmounted(() => source?.close())
       <div class="hero-grid">
         <div class="message-reading">
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
-          <p v-if="latest.kind !== 'weather'" class="payload">{{ latest.payload }}</p>
+          <div v-if="latest.kind !== 'weather'" class="payload-block"><small class="raw-label">Raw packet text</small><p class="payload">{{ latest.payload }}</p></div>
           <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
           <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <a :href="locatorURL(latest.position.locator)" target="_blank" rel="noreferrer">{{ latest.position.locator }}</a> <span aria-hidden="true">-</span> <a :href="mapURL(latest.source)" target="_blank" rel="noreferrer">show map</a></div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
           <div class="packet-line"><span>PACKET {{ String(latest.id).padStart(4, '0') }}</span><span>{{ latest.type.toUpperCase() }}</span></div>
