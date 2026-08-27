@@ -14,7 +14,21 @@ const visibleHistory = computed(() => expanded.value ? messages.value : messages
 const latestWeather = computed(() => messages.value.find((message) => message.weather))
 
 function addMessage(message) {
+  if (!message || typeof message !== 'object' || typeof message.id !== 'number') return
+  message.source = typeof message.source === 'string' ? message.source : 'UNKNOWN'
+  message.destination = typeof message.destination === 'string' ? message.destination : 'UNKNOWN'
+  message.path = typeof message.path === 'string' ? message.path : ''
+  message.payload = typeof message.payload === 'string' ? message.payload : ''
+  message.kind = typeof message.kind === 'string' ? message.kind : 'packet'
+  message.type = typeof message.type === 'string' ? message.type : 'packet'
+  message.received = typeof message.received === 'string' && !Number.isNaN(Date.parse(message.received)) ? message.received : new Date().toISOString()
   messages.value = [message, ...messages.value.filter((item) => item.id !== message.id)].slice(0, 100)
+}
+
+function loadMessages(payload) {
+  if (!Array.isArray(payload)) return
+  messages.value = []
+  payload.forEach(addMessage)
 }
 
 function formatTime(value) {
@@ -76,13 +90,18 @@ function connect() {
   source = new EventSource('/api/events')
   source.onopen = () => { connected.value = true }
   source.onerror = () => { connected.value = false }
-  source.addEventListener('aprs', (event) => addMessage(JSON.parse(event.data)))
+  source.addEventListener('aprs', (event) => {
+    try {
+      addMessage(JSON.parse(event.data))
+    } catch { connected.value = false }
+  })
 }
 
 onMounted(async () => {
   try {
     const response = await fetch('/api/messages')
-    messages.value = await response.json()
+    if (!response.ok) throw new Error(`message request failed: ${response.status}`)
+    loadMessages(await response.json())
   } catch { connected.value = false }
   connect()
 })
