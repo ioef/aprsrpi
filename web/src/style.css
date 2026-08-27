@@ -12,6 +12,17 @@ button { color: inherit; font: inherit; }
 .status { gap: 9px; color: #8dc7a7; }
 .status.offline { color: #d28b71; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 14px currentColor; }
+.topbar-actions { display: flex; align-items: center; gap: 22px; }
+.weather-button { border: 1px solid #496866; padding: 7px 10px; background: transparent; color: #e5a93d; cursor: pointer; font: 11px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
+.weather-button:hover { border-color: #e5a93d; background: #173038; }
+.weather-dialog-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(2 8 10 / 78%); }
+.weather-dialog { width: min(720px, 100%); border: 1px solid #496866; background: #0d1b20; box-shadow: 0 20px 70px rgb(0 0 0 / 45%); padding: 28px; }
+.weather-dialog-header { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid #294047; }
+.weather-dialog-header small, .weather-dialog-header time { display: block; color: #64817f; font: 11px 'DM Mono', monospace; letter-spacing: .1em; }
+.weather-dialog-header h2 { margin: 7px 0; color: #e5a93d; font-size: 30px; letter-spacing: 0; }
+.dialog-close { width: 34px; height: 34px; border: 1px solid #496866; background: transparent; color: #c6d8d1; cursor: pointer; font: 30px/28px 'Space Grotesk', sans-serif; }
+.dialog-close:hover { border-color: #e5a93d; color: #e5a93d; }
+.weather-dialog-grid { margin-top: 26px; }
 .hero-message { max-width: 1440px; padding: clamp(48px, 8vh, 110px) 0 clamp(58px, 9vh, 120px); animation: reveal .7s ease-out both; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 390px); gap: clamp(18px, 2vw, 36px); align-items: start; margin-top: 28px; }
 .message-reading { min-width: 0; }
@@ -73,4 +84,4 @@ h2 { margin: 0; color: #9db2ad; font: 12px 'DM Mono', monospace; letter-spacing:
 @keyframes sweep { to { transform: rotate(360deg); } }
 @media (max-width: 1100px) { .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); gap: 36px; } .weather-panel, .packet-panel { padding-left: 26px; } .weather-grid { grid-template-columns: 1fr; } }
 @media (max-width: 850px) { .hero-grid { grid-template-columns: 1fr; gap: 34px; } .weather-panel, .packet-panel { border-left: 0; border-top: 1px solid #294047; padding: 24px 0 0; } .weather-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .kiosk-shell { padding: 20px 18px 34px; } .hero-message { padding-top: 64px; } .identity { gap: 14px; } .aprs-symbol { width: 50px; height: 50px; flex-basis: 50px; background-size: 800px 300px; background-position: calc(var(--sprite-column, 0) * -50px) calc(var(--sprite-row, 0) * -50px); } .weather-grid { grid-template-columns: 1fr; } .weather-metric strong { font-size: 24px; } .traffic-row { grid-template-columns: 28px 68px 1fr; gap: 6px 10px; } .traffic-row .arrow, .traffic-row > span:nth-of-type(3) { display: none; } .traffic-row p { grid-column: 3; } }
+@media (max-width: 700px) { .kiosk-shell { padding: 20px 18px 34px; } .topbar { align-items: flex-start; gap: 16px; } .topbar-actions { flex-direction: column-reverse; align-items: flex-end; gap: 10px; } .hero-message { padding-top: 64px; } .identity { gap: 14px; } .aprs-symbol { width: 50px; height: 50px; flex-basis: 50px; background-size: 800px 300px; background-position: calc(var(--sprite-column, 0) * -50px) calc(var(--sprite-row, 0) * -50px); } .weather-grid { grid-template-columns: 1fr; } .weather-metric strong { font-size: 24px; } .weather-dialog { padding: 20px; } .traffic-row { grid-template-columns: 28px 68px 1fr; gap: 6px 10px; } .traffic-row .arrow, .traffic-row > span:nth-of-type(3) { display: none; } .traffic-row p { grid-column: 3; } }

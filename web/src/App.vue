@@ -4,10 +4,12 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 const messages = ref([])
 const connected = ref(false)
 const expanded = ref(false)
+const weatherReportOpen = ref(false)
 let source
 
 const latest = computed(() => messages.value[0])
 const visibleHistory = computed(() => expanded.value ? messages.value : messages.value.slice(0, 8))
+const latestWeather = computed(() => messages.value.find((message) => message.weather))
 
 function addMessage(message) {
   messages.value = [message, ...messages.value.filter((item) => item.id !== message.id)].slice(0, 100)
@@ -80,8 +82,29 @@ onUnmounted(() => source?.close())
   <main class="kiosk-shell">
     <header class="topbar">
       <div class="brand"><span class="brand-mark">//</span><span>APRS WATCH</span></div>
-      <div class="status" :class="{ offline: !connected }"><span class="status-dot"></span>{{ connected ? 'LIVE' : 'WAITING FOR TNC' }}</div>
+      <div class="topbar-actions">
+        <button v-if="latestWeather" class="weather-button" type="button" @click="weatherReportOpen = true">Latest WX</button>
+        <div class="status" :class="{ offline: !connected }"><span class="status-dot"></span>{{ connected ? 'LIVE' : 'WAITING FOR TNC' }}</div>
+      </div>
     </header>
+
+    <div v-if="weatherReportOpen && latestWeather" class="weather-dialog-backdrop" @click.self="weatherReportOpen = false">
+      <section class="weather-dialog" role="dialog" aria-modal="true" aria-labelledby="latest-weather-title">
+        <div class="weather-dialog-header">
+          <div><small>LAST RECEIVED WEATHER REPORT</small><h2 id="latest-weather-title">{{ latestWeather.source }}</h2><time>{{ formatTime(latestWeather.received) }}</time></div>
+          <button class="dialog-close" type="button" aria-label="Close latest weather report" @click="weatherReportOpen = false">&#215;</button>
+        </div>
+        <div class="weather-grid weather-dialog-grid">
+          <div v-if="latestWeather.weather.temperatureC != null" class="weather-metric"><img src="/icons/thermometer.svg" alt=""><div><small>TEMP</small><strong>{{ latestWeather.weather.temperatureC.toFixed(1) }}°C</strong></div></div>
+          <div v-if="latestWeather.weather.pressureHpa != null" class="weather-metric"><img src="/icons/pressure.svg" alt=""><div><small>PRESSURE</small><strong>{{ latestWeather.weather.pressureHpa.toFixed(1) }} hPa</strong></div></div>
+          <div v-if="latestWeather.weather.humidity != null" class="weather-metric"><img src="/icons/humidity.svg" alt=""><div><small>HUMIDITY</small><strong>{{ latestWeather.weather.humidity }}%</strong></div></div>
+          <div v-if="latestWeather.weather.windSpeedKnots != null" class="weather-metric"><img src="/icons/wind.svg" alt=""><div><small>WIND</small><strong>{{ latestWeather.weather.windSpeedKnots }} kt<span v-if="latestWeather.weather.windDirection != null"> @ {{ latestWeather.weather.windDirection }}°</span></strong></div></div>
+          <div v-if="latestWeather.weather.gustKnots != null" class="weather-metric"><img src="/icons/wind.svg" alt=""><div><small>GUST</small><strong>{{ latestWeather.weather.gustKnots }} kt</strong></div></div>
+          <div v-if="latestWeather.weather.rainLastHourMm != null" class="weather-metric"><img src="/icons/rain.svg" alt=""><div><small>RAIN / 1H</small><strong>{{ latestWeather.weather.rainLastHourMm.toFixed(1) }} mm</strong></div></div>
+          <div v-if="latestWeather.weather.rain24HoursMm != null" class="weather-metric"><img src="/icons/rain.svg" alt=""><div><small>RAIN / 24H</small><strong>{{ latestWeather.weather.rain24HoursMm.toFixed(1) }} mm</strong></div></div>
+        </div>
+      </section>
+    </div>
 
     <section v-if="latest" class="hero-message" aria-live="polite">
       <div class="hero-meta"><span>INCOMING MESSAGE</span><time>{{ formatTime(latest.received) }}</time></div>
