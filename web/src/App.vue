@@ -5,6 +5,8 @@ const messages = ref([])
 const connected = ref(false)
 const expanded = ref(false)
 const weatherReportOpen = ref(false)
+const mapDialogOpen = ref(false)
+const mapDialogURL = ref('')
 let source
 
 const latest = computed(() => messages.value[0])
@@ -35,8 +37,18 @@ function mapURL(source) {
   return `https://aprs.fi/#!call=a%2F${encodeURIComponent(source)}`
 }
 
+function openMap(source) {
+  mapDialogURL.value = mapURL(source)
+  mapDialogOpen.value = true
+}
+
 function locatorURL(locator) {
   return `https://aprs.fi/#!addr=${encodeURIComponent(locator)}`
+}
+
+function openLocator(locator) {
+  mapDialogURL.value = locatorURL(locator)
+  mapDialogOpen.value = true
 }
 
 function spriteClass(message) {
@@ -106,6 +118,13 @@ onUnmounted(() => source?.close())
       </section>
     </div>
 
+    <div v-if="mapDialogOpen" class="map-dialog-backdrop" @click.self="mapDialogOpen = false">
+      <section class="map-dialog" role="dialog" aria-modal="true" aria-labelledby="map-dialog-title">
+        <div class="map-dialog-header"><h2 id="map-dialog-title">APRS.FI MAP</h2><button class="dialog-close" type="button" aria-label="Close map" @click="mapDialogOpen = false">&#215;</button></div>
+        <iframe :src="mapDialogURL" title="APRS.fi map" class="map-frame"></iframe>
+      </section>
+    </div>
+
     <section v-if="latest" class="hero-message" aria-live="polite">
       <div class="hero-meta"><span>INCOMING MESSAGE</span><time>{{ formatTime(latest.received) }}</time></div>
       <div class="hero-grid">
@@ -113,7 +132,7 @@ onUnmounted(() => source?.close())
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
           <div v-if="latest.kind !== 'weather'" class="payload-block"><small class="raw-label">Raw packet text</small><p class="payload">{{ latest.payload }}</p></div>
           <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
-          <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <a :href="locatorURL(latest.position.locator)" target="_blank" rel="noreferrer">{{ latest.position.locator }}</a> <span aria-hidden="true">-</span> <a :href="mapURL(latest.source)" target="_blank" rel="noreferrer">show map</a></div><div v-if="latest.position.micEStatus" class="position-comment">Mic-E message: {{ latest.position.micEStatus }}</div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
+          <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div><div v-if="latest.position.micEStatus" class="position-comment">Mic-E message: {{ latest.position.micEStatus }}</div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
           <div class="packet-line"><span>PACKET {{ String(latest.id).padStart(4, '0') }}</span><span>{{ latest.type.toUpperCase() }}</span></div>
         </div>
         <aside class="weather-panel" v-if="latest.weather">
