@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +65,10 @@ func commandResponse(command, upper string, config Config) string {
 			city = fallback(config.WeatherCity, "Thessaloniki")
 		}
 		return fetchWeather(city, config.OpenWeatherAPIKey)
+	case upper == "QUAKE":
+		return fetchEarthquakes("")
+	case strings.HasPrefix(upper, "QUAKE?"):
+		return fetchEarthquakes(strings.TrimSpace(command[len("QUAKE?"):]))
 	case upper == "TIP":
 		return tips[rand.Intn(len(tips))]
 	case upper == "REPEATERS":
@@ -73,7 +78,7 @@ func commandResponse(command, upper string, config Config) string {
 	case upper == "BEACON":
 		return "QSL. Signal received loud and clear! 73!"
 	case upper == "HELP":
-		return "Cmds: WHEREMAI, ISS_LOCATION, ISS_ASTROS, SKGWEATHER, WEATHER?CITY, TIP, REPEATERS, SUNRISE, BEACON, HELP"
+		return "Cmds: WEATHER?CITY, QUAKE, QUAKE?COUNTRY, ISS_LOCATION, HELP"
 	default:
 		return "Unknown command. Try HELP"
 	}
@@ -115,6 +120,68 @@ func fetchWeather(city, key string) string {
 	}
 	return fmt.Sprintf("Weather in %s: %.1f C, %s", city, data.Main.Temp, data.Weather[0].Description)
 }
+
+var usgsEarthquakeURL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+
+func fetchEarthquakes(country string) string {
+	parameters := url.Values{"format": {"geojson"}, "orderby": {"time"}}
+	boundedCountry := false
+	if country == "" {
+		parameters.Set("limit", "3")
+	} else {
+		if bounds, ok := earthquakeCountryBounds[strings.ToUpper(country)]; ok {
+			boundedCountry = true
+			parameters.Set("limit", "1")
+			parameters.Set("minlatitude", strconv.FormatFloat(bounds.lowerLatitude, 'f', -1, 64))
+			parameters.Set("maxlatitude", strconv.FormatFloat(bounds.upperLatitude, 'f', -1, 64))
+			parameters.Set("minlongitude", strconv.FormatFloat(bounds.lowerLongitude, 'f', -1, 64))
+			parameters.Set("maxlongitude", strconv.FormatFloat(bounds.upperLongitude, 'f', -1, 64))
+		} else {
+			parameters.Set("limit", "200")
+		}
+	}
+	var data struct {
+		Features []struct {
+			Properties struct {
+				Magnitude float64 `json:"mag"`
+				Place     string  `json:"place"`
+			} `json:"properties"`
+		} `json:"features"`
+	}
+	if !getJSON(usgsEarthquakeURL+"?"+parameters.Encode(), &data) {
+		return "Earthquake service unavailable"
+	}
+	if len(data.Features) == 0 {
+		if country == "" {
+			return "No recent earthquakes reported"
+		}
+		return "No recent earthquake found for " + country
+	}
+	if country != "" {
+		quake := data.Features[0].Properties
+		if !boundedCountry {
+			found := false
+			for _, feature := range data.Features {
+				if strings.Contains(strings.ToUpper(feature.Properties.Place), strings.ToUpper(country)) {
+					quake = feature.Properties
+					found = true
+					break
+				}
+			}
+			if !found {
+				return "No recent earthquake found for " + country
+			}
+		}
+		return fmt.Sprintf("Latest %s quake: M%.1f %s", country, quake.Magnitude, quake.Place)
+	}
+	quakes := make([]string, 0, len(data.Features))
+	for _, feature := range data.Features {
+		quake := feature.Properties
+		quakes = append(quakes, fmt.Sprintf("M%.1f %s", quake.Magnitude, quake.Place))
+	}
+	return "Latest quakes: " + strings.Join(quakes, "; ")
+}
+
 func fetchISSLocation() string {
 	var data struct {
 		Message  string `json:"message"`
