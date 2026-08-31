@@ -2,6 +2,50 @@
 
 A Go-native APRS monitor with a Vue.js full-screen kiosk frontend. It reads and writes KISS frames from a bidirectional serial or Bluetooth RFCOMM TNC.
 
+## Example station setup
+
+This is an example mobile/base APRS kiosk using a Yaesu FTM-150EASP as the RF transceiver. `aprsrpi` runs on a Raspberry Pi 4, receives and transmits APRS through a Mobilinkd KISS TNC, and presents received traffic on the attached touchscreen.
+
+```mermaid
+flowchart LR
+	RF["144.800 MHz APRS RF"] <--> Radio["Yaesu FTM-150EASP\nVHF/UHF transceiver"]
+	Radio <--> Cable["Yaesu CT-167 Mini DIN10\nto stripped-wire data cable"]
+	Cable <--> TNC["Mobilinkd\nKISS TNC"]
+	TNC <--> Pi["USB cable\nRaspberry Pi 4 / aprsrpi"]
+	Pi --> Display["7 inch Raspberry Pi touchscreen\n1024 x 600 HDMI + USB touch"]
+	Pi <--> Internet["Optional network\nAPRS-IS / weather lookups"]
+```
+
+### Indicative bill of materials
+
+| Item | Example used in this station | Purpose | Notes |
+| --- | --- | --- | --- |
+| Transceiver | Yaesu FTM-150EASP | RF receive and transmit | Use an appropriate antenna, power supply, and operating licence for the band and location. |
+| Radio interface cable | Yaesu CT-167 Mini DIN10-to-stripped-wire data cable | Carries receive audio, transmit audio, ground, and PTT/control connections | This cable is also marketed for FTM-100, FTM-300, and FTM-400 radios. Confirm the FTM-150EASP connector pinout in the Yaesu documentation before wiring. Do not assume wire colours or pin assignments. |
+| KISS TNC | Mobilinkd | Converts radio audio/PTT to bidirectional KISS frames | In this example it connects to the Pi by USB cable, providing a bidirectional serial KISS connection. |
+| Computer | Raspberry Pi 4 | Runs the Go backend and Chromium kiosk | Raspberry Pi OS 64-bit and a reliable 5 V power supply are recommended. |
+| Display | 7 inch Raspberry Pi Monitor, 1024x600 IPS, 5-point capacitive touchscreen | Shows the `aprsrpi` kiosk and supports touch interaction | HDMI carries video; USB normally carries touch input and may provide display power, depending on the monitor model. |
+| Storage | Quality microSD card or USB SSD | Hosts Raspberry Pi OS and application data | Use a durable card/SSD for unattended operation. |
+| Power and mounting | Pi PSU, radio power wiring, suitable mounts/enclosure | Provides stable power and physical installation | Keep radio power, Pi power, and signal/audio wiring mechanically secure. |
+| Software | `aprsrpi` | Native APRS monitor, bot, igate, digipeater, and kiosk | Configure the station callsign, KISS endpoint, and optional APRS-IS credentials before transmitting. |
+
+### Connection notes
+
+- Connect the FTM-150EASP data interface to the Mobilinkd exactly as specified by the radio and TNC manuals. Incorrect PTT or audio wiring can prevent transmit or damage equipment.
+- Connect the Mobilinkd to the Pi by USB cable, then configure its bidirectional serial device as `kiss.endpoint` in `/etc/aprsrpi/config.json`, for example `serial:///dev/ttyACM0`. The Bluetooth RFCOMM example below is an alternative setup, not used by this station.
+- Connect the display to the Pi by HDMI and its touch interface by USB. Chromium runs full-screen and presents the APRS kiosk on that display.
+- APRS-IS is optional. The receive display and RF bot work locally through the TNC; APRS-IS features require network access and valid credentials.
+
+### Station photos
+
+Add your own installation images under `docs/images/` and replace the placeholders below when they are available:
+
+<!--
+![Complete station](docs/images/complete-station.jpg)
+![FTM-150EASP and Mobilinkd wiring](docs/images/ftm150-mobilinkd-wiring.jpg)
+![Raspberry Pi kiosk display](docs/images/rpi-kiosk-display.jpg)
+-->
+
 ## Go packages
 
 - `internal/aprs`: KISS framing, AX.25 addresses, APRS payload parsing, weather extraction, and outbound message encoding.
