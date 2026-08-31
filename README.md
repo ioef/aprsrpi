@@ -36,21 +36,10 @@ flowchart LR
 - Connect the display to the Pi by HDMI and its touch interface by USB. Chromium runs full-screen and presents the APRS kiosk on that display.
 - APRS-IS is optional. The receive display and RF bot work locally through the TNC; APRS-IS features require network access and valid credentials.
 
-### Station photos
-
-Add your own installation images under `docs/images/` and replace the placeholders below when they are available:
-
-<!--
-![Complete station](docs/images/complete-station.jpg)
-![FTM-150EASP and Mobilinkd wiring](docs/images/ftm150-mobilinkd-wiring.jpg)
-![Raspberry Pi kiosk display](docs/images/rpi-kiosk-display.jpg)
--->
-
 ## Kiosk screenshots
 
-The following examples show the physical station and the main APRS kiosk views. Add the four images under `docs/images/` using these filenames, then remove the surrounding Markdown comment to display them:
+The following examples show the physical station and the main APRS kiosk views.
 
-<!--
 ![Raspberry Pi kiosk screen beside the Yaesu FTM-150EASP](docs/images/station-screen-and-yaesu.jpg)
 *Raspberry Pi touchscreen kiosk beside the Yaesu FTM-150EASP.*
 
@@ -62,7 +51,6 @@ The following examples show the physical station and the main APRS kiosk views. 
 
 ![Normal APRS packet reception](docs/images/kiosk-normal-reception.png)
 *A normal APRS packet shown after reception.*
--->
 
 ## Go packages
 
