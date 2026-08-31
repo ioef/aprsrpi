@@ -46,6 +46,24 @@ Add your own installation images under `docs/images/` and replace the placeholde
 ![Raspberry Pi kiosk display](docs/images/rpi-kiosk-display.jpg)
 -->
 
+## Kiosk screenshots
+
+The following examples show the physical station and the main APRS kiosk views. Add the four images under `docs/images/` using these filenames, then remove the surrounding Markdown comment to display them:
+
+<!--
+![Raspberry Pi kiosk screen beside the Yaesu FTM-150EASP](docs/images/station-screen-and-yaesu.jpg)
+*Raspberry Pi touchscreen kiosk beside the Yaesu FTM-150EASP.*
+
+![Live APRS weather report](docs/images/kiosk-live-weather-report.png)
+*A received weather packet shown in the live kiosk view.*
+
+![Latest weather report dialog](docs/images/kiosk-latest-wather-dialog.png)
+*The retained latest WX report opened from the kiosk toolbar.*
+
+![Normal APRS packet reception](docs/images/kiosk-normal-reception.png)
+*A normal APRS packet shown after reception.*
+-->
+
 ## Go packages
 
 - `internal/aprs`: KISS framing, AX.25 addresses, APRS payload parsing, weather extraction, and outbound message encoding.
