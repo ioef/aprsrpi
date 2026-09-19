@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"aprsrpi/internal/aprs"
@@ -157,6 +158,11 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 				break
 			}
 			if message, ok := aprs.Parse(frame); ok {
+				if strings.EqualFold(message.Source, settings.Bot.Callsign) {
+					// Twin-RX echo guard: Band A hearing our own Band B transmit must not re-enter the pipeline.
+					logging.Debugf("rf packet discarded: own callsign echo source=%s destination=%s", message.Source, message.Destination)
+					continue
+				}
 				logging.Debugf("rf raw_kiss_frame=%x", frame)
 				hub.Publish(message)
 				logging.Infof("rf receive source=%s destination=%s type=%s payload=%q", message.Source, message.Destination, message.Type, message.Payload)
@@ -289,5 +295,26 @@ func openKISS(endpoint string, baud int) (io.ReadWriteCloser, error) {
 	if err := exec.Command("stty", "-F", path, strconv.Itoa(baud), "raw", "-echo").Run(); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(path, os.O_RDWR, 0)
+	device, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+	if err := flushSerialInput(device); err != nil {
+		logging.Warnf("serial flush skipped for %s: %v", path, err)
+	}
+	return device, nil
+}
+
+// Linux ioctl numbers for termios TCFLSH/TCIOFLUSH; discards bytes buffered before the decode loop starts.
+const (
+	tcflsh    = 0x540B
+	tcioflush = 2
+)
+
+func flushSerialInput(device *os.File) error {
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, device.Fd(), tcflsh, tcioflush)
+	if errno != 0 {
+		return errno
+	}
+	return nil
 }
