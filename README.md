@@ -61,7 +61,7 @@ The following examples show the physical station and the main APRS kiosk views.
 - `internal/policy`: duplicate suppression, recently-heard tracking, and transmit limiting.
 - `main.go`: Raspberry Pi device lifecycle, HTTP wiring, KISS reconnect loop, native igate, and native digipeating.
 
-The APRS parser handles the standard information-field data types in the APRS Protocol Reference, including positions (timestamped, compressed, and ambiguous), weather, telemetry, messages and bulletins, objects/items, queries, status, grid locators, and third-party packets. It keeps the original payload for display and forwarding. Vendor-specific raw weather formats and user-defined payloads are retained and classified where possible; their opaque application data is not decoded without a format definition.
+The APRS parser handles the standard information-field data types in the APRS Protocol Reference, including positions (timestamped, compressed, and ambiguous), weather, telemetry, messages and bulletins, objects/items, queries, status, grid locators, and third-party packets. Compressed positions with alphanumeric overlay symbol tables are supported, including weather stations using the weather symbol. It keeps the original payload for display and forwarding. Vendor-specific raw weather formats and user-defined payloads are retained and classified where possible; their opaque application data is not decoded without a format definition.
 
 ## APRS frame diagram
 

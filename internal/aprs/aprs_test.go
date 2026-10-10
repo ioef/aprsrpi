@@ -154,6 +154,26 @@ func TestParseTimestampedWeatherPackets(t *testing.T) {
 	}
 }
 
+func TestParseCompressedOverlayWeatherPacket(t *testing.T) {
+	packet := "SV2HRW-10>APLRG1:=L9yA3T??b_ !G.../...g...t061h55b10123Digi & i-Gate Batt=4.17V"
+	message, ok := ParseTNC2(packet)
+	if !ok {
+		t.Fatal("compressed overlay weather packet was rejected")
+	}
+	if message.Position == nil || message.Position.SymbolTable != "L" || message.Position.SymbolCode != "_" {
+		t.Fatalf("compressed overlay position was not decoded: %+v", message.Position)
+	}
+	if message.Weather == nil || message.Weather.TemperatureC == nil || message.Weather.Humidity == nil || message.Weather.PressureHpa == nil {
+		t.Fatalf("weather fields were not decoded: %+v", message.Weather)
+	}
+	if math.Abs(*message.Weather.TemperatureC-(61-32)*5.0/9.0) > 1e-9 || *message.Weather.Humidity != 55 || math.Abs(*message.Weather.PressureHpa-1012.3) > 1e-9 {
+		t.Fatalf("decoded weather values = %+v", message.Weather)
+	}
+	if message.Kind != "weather" || message.Type != "weather" {
+		t.Fatalf("classification = kind=%s type=%s, want weather", message.Kind, message.Type)
+	}
+}
+
 func TestClassifiesKnownPacketTypes(t *testing.T) {
 	tests := []struct {
 		name    string

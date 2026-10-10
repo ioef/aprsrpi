@@ -25,6 +25,63 @@ const morseCode = {
 const latest = computed(() => messages.value[0])
 const visibleHistory = computed(() => expanded.value ? messages.value : messages.value.slice(0, 8))
 const latestWeather = computed(() => messages.value.find((message) => message.weather))
+const structuredDetails = computed(() => {
+  const message = latest.value
+  if (!message) return []
+
+  const details = []
+  const add = (label, value) => {
+    if (value !== undefined && value !== null && value !== '') details.push({ label, value })
+  }
+
+  if (message.aprsMessage) {
+    add('Addressee', message.aprsMessage.addressee)
+    add('Message', message.aprsMessage.text)
+    add('Message number', message.aprsMessage.number)
+    add('Reply acknowledgement', message.aprsMessage.replyAck)
+  }
+  if (message.object) {
+    add('Object', `${message.object.name} · ${message.object.alive ? 'active' : 'killed'}`)
+    add('Object timestamp', message.object.timestamp)
+  }
+  add('Status', message.statusText)
+  add('Query', message.query)
+  add('Grid locator', message.gridLocator)
+
+  const position = message.position
+  if (position) {
+    add('Position timestamp', position.timestamp)
+    add('Position ambiguity', position.ambiguity ? `${position.ambiguity} digit${position.ambiguity === 1 ? '' : 's'}` : '')
+    add('Altitude', position.altitudeFt != null ? `${position.altitudeFt} ft` : '')
+    add('Course', position.course != null ? `${position.course}°` : '')
+    add('Speed', position.speedKnots != null ? `${position.speedKnots} kt` : '')
+    add('DF bearing', position.dfBearing != null ? `${position.dfBearing}°` : '')
+    add('DF number', position.dfNumber)
+    add('DF range', position.dfRange)
+    add('DF quality', position.dfQuality)
+  }
+
+  const telemetry = message.telemetry
+  if (telemetry) {
+    add('Telemetry sequence', telemetry.sequenceLabel || telemetry.sequence)
+    add('Analog values', telemetry.analogValues?.length ? telemetry.analogValues.join(', ') : telemetry.analog?.join(', '))
+    add('Digital bits', telemetry.digital || telemetry.bits)
+    add('Parameters', telemetry.parameters?.join(' · '))
+    add('Units', telemetry.units?.join(' · '))
+    add('Calibration coefficients', telemetry.coefficients?.map((group) => group.join(', ')).join(' · '))
+    if (telemetry.base91) add('Encoding', 'Base91 telemetry')
+  }
+
+  if (message.weather) {
+    add('Weather software', message.weather.software)
+    add('Weather station unit', message.weather.unit)
+  }
+  if (message.thirdParty) {
+    add('Encapsulated packet', `${message.thirdParty.source} · ${message.thirdParty.type}`)
+  }
+
+  return details
+})
 
 function stopMorsePlayback() {
   if (morseOscillator) {
@@ -262,9 +319,18 @@ onUnmounted(() => {
       <div class="hero-grid">
         <div class="message-reading">
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
-          <div v-if="latest.kind !== 'weather'" class="payload-block"><small class="raw-label">Raw packet text</small><p class="payload">{{ latest.payload }}</p></div>
-          <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
+          <p v-if="latest.kind === 'weather'" class="weather-summary">Structured weather report from {{ latest.source }}</p>
           <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div><div v-if="latest.position.micEStatus" class="position-comment">Mic-E message: {{ latest.position.micEStatus }}</div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
+          <dl v-if="structuredDetails.length" class="packet-details" aria-label="Decoded packet details">
+            <div v-for="detail in structuredDetails" :key="detail.label" class="packet-detail">
+              <dt>{{ detail.label }}</dt>
+              <dd>{{ detail.value }}</dd>
+            </div>
+          </dl>
+          <details class="payload-details">
+            <summary>Show raw APRS payload</summary>
+            <p class="payload">{{ latest.payload }}</p>
+          </details>
           <div class="packet-line"><span>PACKET {{ String(latest.id).padStart(4, '0') }}</span><span>{{ latest.type.toUpperCase() }}</span></div>
         </div>
         <aside class="weather-panel" v-if="latest.weather">
@@ -304,7 +370,7 @@ onUnmounted(() => {
           <strong>{{ message.source }}</strong>
           <span class="arrow">→</span>
           <span>{{ message.destination }}</span>
-          <p>{{ message.payload }}</p>
+          <p :title="message.payload">{{ message.payload }}</p>
         </article>
       </div>
       <div v-else class="no-traffic">No packets received yet</div>

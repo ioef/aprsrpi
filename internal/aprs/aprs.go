@@ -35,7 +35,12 @@ const (
 	positionTimestampLength   = 7
 	latitudeLength            = 7
 	longitudeLength           = 8
-	uncompressedPositionLen   = 19
+	latitudeHemisphereOffset  = latitudeLength
+	symbolTableOffset         = latitudeHemisphereOffset + 1
+	longitudeOffset           = symbolTableOffset + 1
+	longitudeHemisphereOffset = longitudeOffset + longitudeLength
+	symbolCodeOffset          = longitudeHemisphereOffset + 1
+	uncompressedPositionLen   = symbolCodeOffset + 1
 	minimumPositionDataLength = 10
 	latitudeDegreeLength      = 2
 	longitudeDegreeLength     = 3
@@ -337,14 +342,31 @@ func positionTimestamp(payload string, start int) string {
 }
 
 func parsePositionData(value, timestamp string) *Position {
+	if len(value) > 0 && isDigits(value[:1]) {
+		if position := parseUncompressedPosition(value, timestamp); position != nil {
+			return position
+		}
+		if looksLikeUncompressedPosition(value) {
+			return nil
+		}
+	}
 	if isCompressedPosition(value) {
 		return parseCompressedPosition(value, timestamp)
 	}
-	return parseUncompressedPosition(value, timestamp)
+	return nil
+}
+
+func looksLikeUncompressedPosition(value string) bool {
+	return len(value) >= uncompressedPositionLen &&
+		value[latitudeDegreeLength+coordinateDecimalPointOffset] == '.' &&
+		(value[latitudeHemisphereOffset] == 'N' || value[latitudeHemisphereOffset] == 'S') &&
+		isSymbolTable(value[symbolTableOffset]) &&
+		value[longitudeOffset+longitudeDegreeLength+coordinateDecimalPointOffset] == '.' &&
+		(value[longitudeHemisphereOffset] == 'E' || value[longitudeHemisphereOffset] == 'W')
 }
 
 func isCompressedPosition(value string) bool {
-	return len(value) >= 10 && (value[0] == '/' || value[0] == '\\') && isBase91(value[1:9])
+	return len(value) >= 10 && isSymbolTable(value[0]) && isBase91(value[1:9])
 }
 
 func parseCompressedPosition(value, timestamp string) *Position {
@@ -365,32 +387,29 @@ func parseUncompressedPosition(value, timestamp string) *Position {
 	if !ok {
 		return nil
 	}
-	if value[7] != 'N' && value[7] != 'S' {
+	if value[latitudeHemisphereOffset] != 'N' && value[latitudeHemisphereOffset] != 'S' {
 		return nil
 	}
-	lon, lonAmbiguity, ok := coordinateWithAmbiguity(value[latitudeLength+2:latitudeLength+2+longitudeLength], false)
+	lon, lonAmbiguity, ok := coordinateWithAmbiguity(value[longitudeOffset:longitudeHemisphereOffset], false)
 	if !ok {
 		return nil
 	}
-	longitudeHemisphereIndex := latitudeLength + 2 + longitudeLength
-	if value[longitudeHemisphereIndex] != 'E' && value[longitudeHemisphereIndex] != 'W' {
+	if value[longitudeHemisphereOffset] != 'E' && value[longitudeHemisphereOffset] != 'W' {
 		return nil
 	}
-	symbolTableIndex := latitudeLength + 1
-	if !isSymbolTable(value[symbolTableIndex]) {
+	if !isSymbolTable(value[symbolTableOffset]) {
 		return nil
 	}
 	if latAmbiguity != lonAmbiguity {
 		return nil
 	}
-	if value[latitudeLength] == 'S' {
+	if value[latitudeHemisphereOffset] == 'S' {
 		lat = -lat
 	}
-	if value[longitudeHemisphereIndex] == 'W' {
+	if value[longitudeHemisphereOffset] == 'W' {
 		lon = -lon
 	}
-	symbolCodeIndex := longitudeHemisphereIndex + 1
-	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[symbolTableIndex]), SymbolCode: string(value[symbolCodeIndex]), Timestamp: timestamp, Ambiguity: latAmbiguity}, value[symbolCodeIndex+1:])
+	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[symbolTableOffset]), SymbolCode: string(value[symbolCodeOffset]), Timestamp: timestamp, Ambiguity: latAmbiguity}, value[symbolCodeOffset+1:])
 }
 
 func parseMicEPosition(destination, payload string) *Position {
