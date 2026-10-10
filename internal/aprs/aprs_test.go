@@ -234,3 +234,231 @@ func TestNormalPositionIsNotClassifiedAsWeather(t *testing.T) {
 		t.Fatalf("normal position classified as weather: %+v", message)
 	}
 }
+
+func TestStandardDataTypeIdentifiers(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{"positionless weather", "_t073h22b10210", "weather"},
+		{"raw Ultimeter weather", "$ULTW0031003702CE", "raw-weather"},
+		{"Peet Bros weather", "#50B7500820082", "raw-weather"},
+		{"Peet Bros alternate", "*7007600000000", "raw-weather"},
+		{"shelter data", "+092345zShelter", "shelter"},
+		{"space weather", ".Solar data", "space-weather"},
+		{"legacy Peet Bros marker", "&PEET", "peet-bros"},
+		{"reserved digit", "0unused", "reserved"},
+		{"legacy unknown lowercase", "xunsupported", "unknown"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, ok := ParseTNC2("N0CALL>APRS:" + test.payload)
+			if !ok || message.Type != test.want {
+				t.Fatalf("parsed type = %q, want %q (ok=%t)", message.Type, test.want, ok)
+			}
+		})
+	}
+}
+
+func TestParseAmbiguousCoordinatesAndTimestamp(t *testing.T) {
+	message, ok := ParseTNC2("N0CALL>APRS:@101647z49  .  N/072  .  W>comment")
+	if !ok || message.Position == nil {
+		t.Fatalf("ambiguous position was not parsed: %+v", message)
+	}
+	if message.Position.Ambiguity != 4 || math.Abs(message.Position.Latitude-49.5) > 1e-9 || math.Abs(message.Position.Longitude+72.5) > 1e-9 {
+		t.Fatalf("position = %+v; want center of 1-degree ambiguity cell", message.Position)
+	}
+	if message.Position.Timestamp != "101647z" {
+		t.Fatalf("timestamp = %q", message.Position.Timestamp)
+	}
+
+	if position := ParsePosition("!9100.00N/18100.00E>"); position != nil {
+		t.Fatalf("out-of-range coordinates accepted: %+v", position)
+	}
+	if position := ParsePosition("@321299z4034.78N/02300.72E>"); position != nil {
+		t.Fatalf("invalid timestamp accepted: %+v", position)
+	}
+}
+
+func TestParseObjectsItemsAndGridLocators(t *testing.T) {
+	object, ok := ParseTNC2("N0CALL>APRS:;LEADER   *092345z/5L!!<*e7>7P[")
+	if !ok || object.Type != "object" || object.Object == nil || !object.Object.Alive || object.Object.Name != "LEADER" || object.Object.Position == nil {
+		t.Fatalf("compressed object was not decoded: %+v", object)
+	}
+
+	killed, ok := ParseTNC2("N0CALL>APRS:;LEADER   _092345z4903.50N/07201.75W>")
+	if !ok || killed.Object == nil || killed.Object.Alive {
+		t.Fatalf("killed object was not decoded: %+v", killed)
+	}
+
+	item, ok := ParseTNC2("N0CALL>APRS:)AID #2!4903.50N/07201.75WA")
+	if !ok || item.Type != "item" || item.Position == nil || item.Position.SymbolCode != "A" {
+		t.Fatalf("item report was not decoded: %+v", item)
+	}
+
+	grid, ok := ParseTNC2("N0CALL>APRS:[IO91SX")
+	if !ok || grid.GridLocator != "IO91sx" {
+		t.Fatalf("six-character locator = %q", grid.GridLocator)
+	}
+	grid, ok = ParseTNC2("N0CALL>APRS:[IO91 comment")
+	if !ok || grid.GridLocator != "IO91" {
+		t.Fatalf("four-character locator = %q", grid.GridLocator)
+	}
+}
+
+func TestParseMessageMetadataAndThirdPartyPacket(t *testing.T) {
+	message, ok := ParseTNC2("N0CALL>APRS::N1CALL   :Hello{123}ABC")
+	if !ok || !message.IsMessage || message.APRSMessage == nil {
+		t.Fatalf("message not decoded: %+v", message)
+	}
+	if message.APRSMessage.Addressee != "N1CALL" || message.APRSMessage.Text != "Hello" ||
+		message.APRSMessage.Number != "123" || message.APRSMessage.ReplyAck != "ABC" {
+		t.Fatalf("message details = %+v", message.APRSMessage)
+	}
+
+	bulletin, ok := ParseTNC2("N0CALL>APRS::BLN3     :Snow expected")
+	if !ok || bulletin.Type != "bulletin" || bulletin.APRSMessage == nil {
+		t.Fatalf("bulletin not decoded: %+v", bulletin)
+	}
+	announcement, ok := ParseTNC2("N0CALL>APRS::BLNQ     :Event notice")
+	if !ok || announcement.Type != "announcement" {
+		t.Fatalf("announcement not decoded: %+v", announcement)
+	}
+
+	status, ok := ParseTNC2("N0CALL>APRS:>operational")
+	if !ok || status.StatusText != "operational" {
+		t.Fatalf("status text = %q", status.StatusText)
+	}
+	query, ok := ParseTNC2("N0CALL>APRS:?APRS")
+	if !ok || query.Query != "APRS" {
+		t.Fatalf("query text = %q", query.Query)
+	}
+
+	thirdParty, ok := ParseTNC2("IGATE>APRS:}N0CALL>APRS:>status")
+	if !ok || thirdParty.Type != "third-party" || thirdParty.ThirdParty == nil || thirdParty.ThirdParty.Type != "status" {
+		t.Fatalf("third-party packet not decoded: %+v", thirdParty)
+	}
+}
+
+func TestParseExtendedWeatherAndTelemetry(t *testing.T) {
+	weather := ParseWeather("_10090556c220s004g005t077r001p002P003h00b09900L250l123")
+	if weather == nil || weather.WindDirection == nil || *weather.WindDirection != 220 ||
+		weather.RainSinceMidnight == nil || *weather.RainSinceMidnight != 3 ||
+		weather.Luminosity == nil || *weather.Luminosity != 1123 || weather.Humidity == nil || *weather.Humidity != 100 {
+		t.Fatalf("extended weather fields = %+v", weather)
+	}
+
+	telemetry := ParseTelemetry("T#MIC199,45.7,2.3,190.0,91.0,-7.3,00001100")
+	if telemetry == nil || telemetry.SequenceLabel != "MIC199" || len(telemetry.AnalogValues) != 5 || telemetry.AnalogValues[0] != 45.7 {
+		t.Fatalf("fractional telemetry = %+v", telemetry)
+	}
+
+	base91 := ParseTelemetry("comment |ss1122334455!\"|")
+	if base91 == nil || !base91.Base91 || base91.Sequence != base91Value("ss") || len(base91.Analog) != 5 || base91.Digital != "10000000" {
+		t.Fatalf("base91 telemetry = %+v", base91)
+	}
+
+	definition := ParseTelemetry("EQNS.0,1,0,0,2,0")
+	if definition == nil || len(definition.Coefficients) != 2 || definition.Coefficients[1][1] != 2 {
+		t.Fatalf("telemetry coefficients = %+v", definition)
+	}
+
+	telemetryMessage, ok := ParseTNC2("N0CALL>APRS::N0CALL   :PARM.Battery,Temperature")
+	if !ok || telemetryMessage.Type != "message" || telemetryMessage.Telemetry == nil ||
+		len(telemetryMessage.Telemetry.Parameters) != 2 {
+		t.Fatalf("telemetry parameter message = %+v", telemetryMessage)
+	}
+}
+
+func base91Value(value string) int {
+	result := 0
+	for _, char := range value {
+		result = result*91 + int(char-'!')
+	}
+	return result
+}
+
+func TestParsePharmacyWeatherFromAPRSISAndRF(t *testing.T) {
+	packet := "SV2SNY-2>APAGW,TCPIP,qAS,SV2SNY:@101123z4037.93N/02257.06E_000/000g000t073r000p000P000h22b10210 THESSALONIKI KAMARA PHARMACY"
+	fromIS, ok := ParseTNC2(packet)
+	if !ok || fromIS.Position == nil || fromIS.Weather == nil {
+		t.Fatalf("APRS-IS weather packet not parsed: %+v", fromIS)
+	}
+	if fromIS.Source != "SV2SNY-2" || fromIS.Position.Timestamp != "101123z" ||
+		fromIS.Weather.TemperatureC == nil || fromIS.Weather.Humidity == nil ||
+		fromIS.Weather.PressureHpa == nil || fromIS.Weather.RainSinceMidnight == nil {
+		t.Fatalf("weather fields incomplete: %+v", fromIS)
+	}
+	if *fromIS.Weather.Humidity != 22 || *fromIS.Weather.PressureHpa != 1021 {
+		t.Fatalf("decoded weather = %+v", fromIS.Weather)
+	}
+
+	wire, err := NewDecoder(bytes.NewReader(EncodePacket(fromIS))).Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromRF, ok := Parse(wire)
+	if !ok || fromRF.Type != fromIS.Type || fromRF.Source != fromIS.Source || fromRF.Position == nil ||
+		fromRF.Weather == nil || *fromRF.Weather.PressureHpa != *fromIS.Weather.PressureHpa {
+		t.Fatalf("RF/APRS-IS interpretations differ: is=%+v rf=%+v", fromIS, fromRF)
+	}
+}
+
+func TestObjectWeatherRetainsObjectType(t *testing.T) {
+	message, ok := ParseTNC2("N0CALL>APRS:;WXSTN    *101123z4037.93N/02257.06E_000/000g000t073h22b10210")
+	if !ok || message.Type != "object" || message.Object == nil || message.Weather == nil {
+		t.Fatalf("weather object was not parsed consistently: %+v", message)
+	}
+}
+
+func TestParseNMEAPositionReports(t *testing.T) {
+	tests := []struct {
+		payload    string
+		latitude   float64
+		longitude  float64
+		altitudeFt int
+	}{
+		{"$GPGGA,102705,5157.9762,N,00029.3256,W,1,04,2.0,75.7,M,47.6,M,,*62", 51.96627, -0.48876, 248},
+		{"$GPGLL,2554.459,N,08020.187,W,154027.281,A", 25.90765, -80.33645, 0},
+		{"$GPRMC,063909,A,3349.4302,N,11700.3721,W,43.022,89.3,291099,13.6,E*52", 33.8238367, -117.0062017, 0},
+	}
+	for _, test := range tests {
+		message, ok := ParseTNC2("N0CALL>APRS:" + test.payload)
+		if !ok || message.Type != "raw-gps" || message.Position == nil {
+			t.Fatalf("NMEA position not parsed: %+v", message)
+		}
+		if math.Abs(message.Position.Latitude-test.latitude) > 0.00001 ||
+			math.Abs(message.Position.Longitude-test.longitude) > 0.00001 {
+			t.Fatalf("position = %+v; want %.7f, %.7f", message.Position, test.latitude, test.longitude)
+		}
+		if test.altitudeFt != 0 && (message.Position.AltitudeFt == nil || *message.Position.AltitudeFt != test.altitudeFt) {
+			t.Fatalf("altitude = %+v; want %d ft", message.Position.AltitudeFt, test.altitudeFt)
+		}
+		if position := ParsePosition("$GPGGA,102705,5157.9762,N,00029.3256,W,1,04,2.0,75.7"); position != nil {
+			t.Fatalf("truncated GGA report accepted: %+v", position)
+		}
+	}
+}
+
+func TestPositionExtensionsAndDF(t *testing.T) {
+	position := ParsePosition("!4903.50N/07201.75W>088/036/A=001234 comment")
+	if position == nil || position.Course == nil || *position.Course != 88 || position.SpeedKnots == nil ||
+		*position.SpeedKnots != 36 || position.AltitudeFt == nil || *position.AltitudeFt != 1234 {
+		t.Fatalf("position extensions = %+v", position)
+	}
+
+	df, ok := ParseTNC2("N0CALL>APRS:!4903.50N/07201.75W\\088/036/270/729")
+	if !ok || df.Type != "df" || df.Position == nil || df.Position.DFBearing == nil ||
+		*df.Position.DFBearing != 270 || *df.Position.DFNumber != 7 ||
+		*df.Position.DFRange != 2 || *df.Position.DFQuality != 9 {
+		t.Fatalf("DF report not parsed: %+v", df)
+	}
+}
+
+func TestPositionlessWeatherCapturesStationInfo(t *testing.T) {
+	weather := ParseWeather("_10090556c220s004g005t077r000p000P000h50b09900wRSW")
+	if weather == nil || weather.Software != "" || weather.Unit != "RSW" {
+		t.Fatalf("weather station metadata = %+v", weather)
+	}
+}

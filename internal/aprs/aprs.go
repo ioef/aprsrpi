@@ -5,29 +5,35 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
 type Message struct {
-	ID          int64      `json:"id"`
-	Received    string     `json:"received"`
-	Source      string     `json:"source"`
-	Destination string     `json:"destination"`
-	Path        string     `json:"path"`
-	Payload     string     `json:"payload"`
-	Raw         string     `json:"raw"`
-	Kind        string     `json:"kind"`
-	Icon        string     `json:"icon"`
-	Weather     *Weather   `json:"weather,omitempty"`
-	Position    *Position  `json:"position,omitempty"`
-	Symbol      string     `json:"symbol,omitempty"`
-	IsMessage   bool       `json:"isMessage"`
-	Type        string     `json:"type"`
-	Telemetry   *Telemetry `json:"telemetry,omitempty"`
+	ID          int64         `json:"id"`
+	Received    string        `json:"received"`
+	Source      string        `json:"source"`
+	Destination string        `json:"destination"`
+	Path        string        `json:"path"`
+	Payload     string        `json:"payload"`
+	Raw         string        `json:"raw"`
+	Kind        string        `json:"kind"`
+	Icon        string        `json:"icon"`
+	Weather     *Weather      `json:"weather,omitempty"`
+	Position    *Position     `json:"position,omitempty"`
+	Symbol      string        `json:"symbol,omitempty"`
+	IsMessage   bool          `json:"isMessage"`
+	Type        string        `json:"type"`
+	Telemetry   *Telemetry    `json:"telemetry,omitempty"`
+	APRSMessage *APRSMessage  `json:"aprsMessage,omitempty"`
+	Object      *ObjectReport `json:"object,omitempty"`
+	StatusText  string        `json:"statusText,omitempty"`
+	Query       string        `json:"query,omitempty"`
+	GridLocator string        `json:"gridLocator,omitempty"`
+	ThirdParty  *Message      `json:"thirdParty,omitempty"`
 }
 
 type Position struct {
@@ -40,29 +46,63 @@ type Position struct {
 	URL         string  `json:"url,omitempty"`
 	Locator     string  `json:"locator,omitempty"`
 	MicEStatus  string  `json:"micEStatus,omitempty"`
+	Timestamp   string  `json:"timestamp,omitempty"`
+	Ambiguity   int     `json:"ambiguity,omitempty"`
+	AltitudeFt  *int    `json:"altitudeFt,omitempty"`
+	Course      *int    `json:"course,omitempty"`
+	SpeedKnots  *int    `json:"speedKnots,omitempty"`
+	DFBearing   *int    `json:"dfBearing,omitempty"`
+	DFNumber    *int    `json:"dfNumber,omitempty"`
+	DFRange     *int    `json:"dfRange,omitempty"`
+	DFQuality   *int    `json:"dfQuality,omitempty"`
 }
 
 type Telemetry struct {
-	Sequence   int      `json:"sequence"`
-	Analog     []int    `json:"analog"`
-	Digital    string   `json:"digital"`
-	Parameters []string `json:"parameters,omitempty"`
-	Units      []string `json:"units,omitempty"`
-	Bits       string   `json:"bits,omitempty"`
+	Sequence      int         `json:"sequence"`
+	SequenceLabel string      `json:"sequenceLabel,omitempty"`
+	Analog        []int       `json:"analog"`
+	AnalogValues  []float64   `json:"analogValues,omitempty"`
+	Digital       string      `json:"digital"`
+	Parameters    []string    `json:"parameters,omitempty"`
+	Units         []string    `json:"units,omitempty"`
+	Coefficients  [][]float64 `json:"coefficients,omitempty"`
+	Bits          string      `json:"bits,omitempty"`
+	Base91        bool        `json:"base91,omitempty"`
 }
 
 type Weather struct {
-	TemperatureC   *float64 `json:"temperatureC,omitempty"`
-	WindKnots      *int     `json:"windKnots,omitempty"`
-	GustKnots      *int     `json:"gustKnots,omitempty"`
-	RainLastHour   *int     `json:"rainLastHour,omitempty"`
-	Rain24Hours    *int     `json:"rain24Hours,omitempty"`
-	RainLastHourMm *float64 `json:"rainLastHourMm,omitempty"`
-	Rain24HoursMm  *float64 `json:"rain24HoursMm,omitempty"`
-	PressureHpa    *float64 `json:"pressureHpa,omitempty"`
-	WindDirection  *int     `json:"windDirection,omitempty"`
-	WindSpeedKnots *int     `json:"windSpeedKnots,omitempty"`
-	Humidity       *int     `json:"humidity,omitempty"`
+	TemperatureC        *float64 `json:"temperatureC,omitempty"`
+	WindKnots           *int     `json:"windKnots,omitempty"`
+	GustKnots           *int     `json:"gustKnots,omitempty"`
+	RainLastHour        *int     `json:"rainLastHour,omitempty"`
+	Rain24Hours         *int     `json:"rain24Hours,omitempty"`
+	RainLastHourMm      *float64 `json:"rainLastHourMm,omitempty"`
+	Rain24HoursMm       *float64 `json:"rain24HoursMm,omitempty"`
+	PressureHpa         *float64 `json:"pressureHpa,omitempty"`
+	WindDirection       *int     `json:"windDirection,omitempty"`
+	WindSpeedKnots      *int     `json:"windSpeedKnots,omitempty"`
+	WindSpeedMph        *int     `json:"windSpeedMph,omitempty"`
+	GustMph             *int     `json:"gustMph,omitempty"`
+	Humidity            *int     `json:"humidity,omitempty"`
+	RainSinceMidnight   *int     `json:"rainSinceMidnight,omitempty"`
+	RainSinceMidnightMm *float64 `json:"rainSinceMidnightMm,omitempty"`
+	Luminosity          *int     `json:"luminosity,omitempty"`
+	Software            string   `json:"software,omitempty"`
+	Unit                string   `json:"unit,omitempty"`
+}
+
+type APRSMessage struct {
+	Addressee string `json:"addressee"`
+	Text      string `json:"text"`
+	Number    string `json:"number,omitempty"`
+	ReplyAck  string `json:"replyAck,omitempty"`
+}
+
+type ObjectReport struct {
+	Name      string    `json:"name"`
+	Alive     bool      `json:"alive"`
+	Timestamp string    `json:"timestamp,omitempty"`
+	Position  *Position `json:"position,omitempty"`
 }
 
 type Decoder struct {
@@ -127,28 +167,11 @@ func Parse(frame []byte) (Message, bool) {
 	if len(addresses) < 2 || offset+2 > len(frame) || frame[offset] != 0x03 || frame[offset+1] != 0xf0 {
 		return Message{}, false
 	}
-	payload := CleanPayload(frame[offset+2:])
+	payload := string(frame[offset+2:])
 	if payload == "" {
 		return Message{}, false
 	}
-	message := Message{Received: time.Now().UTC().Format(time.RFC3339), Source: addresses[1], Destination: addresses[0], Path: strings.Join(addresses[2:], " > "), Payload: payload, Raw: string(frame), Kind: "packet", Icon: "radio"}
-	message.Position = ParsePosition(payload, addresses[0])
-	if strings.HasPrefix(payload, "_") || message.Position != nil && message.Position.SymbolCode == "_" {
-		message.Weather = ParseWeather(payload)
-	}
-	if message.Position != nil {
-		message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
-	}
-	if message.Weather != nil {
-		message.Kind, message.Icon = "weather", "weather"
-	}
-	message.Type = packetType(payload, message.Position, message.Weather)
-	message.Telemetry = ParseTelemetry(payload)
-	if strings.HasPrefix(payload, ":") {
-		message.Kind, message.Icon = "message", "message"
-		message.IsMessage = true
-	}
-	return message, true
+	return parseMessage(addresses[1], addresses[0], strings.Join(addresses[2:], " > "), payload, string(frame), 0), true
 }
 
 // CleanPayload keeps APRS text readable while removing TNC line noise and invalid UTF-8.
@@ -166,6 +189,9 @@ func CleanPayload(payload []byte) string {
 }
 
 func ParsePosition(payload string, destination ...string) *Position {
+	if strings.HasPrefix(payload, "$") {
+		return parseNMEAPosition(payload)
+	}
 	if len(payload) > 0 && (payload[0] == '`' || payload[0] == '\'') {
 		if len(destination) > 0 {
 			if pos := parseMicEPosition(destination[0], payload); pos != nil {
@@ -173,35 +199,48 @@ func ParsePosition(payload string, destination ...string) *Position {
 			}
 		}
 	}
-	if strings.HasPrefix(payload, ";") && len(payload) >= 37 {
-		return ParsePosition(payload[18:])
+	if strings.HasPrefix(payload, ";") && len(payload) >= 28 {
+		return ParsePosition("!" + payload[18:])
 	}
-	if strings.HasPrefix(payload, ")") && len(payload) >= 30 {
-		return ParsePosition(payload[10:])
+	if strings.HasPrefix(payload, ")") {
+		end := strings.IndexAny(payload[1:], "!_")
+		if end >= 3 && end <= 9 {
+			return ParsePosition("!" + payload[end+2:])
+		}
 	}
 	start := positionStart(payload)
 	if start < 0 || len(payload) < start+10 {
 		return nil
 	}
 	value := payload[start:]
+	timestamp := ""
+	if start == 8 {
+		timestamp = payload[1:8]
+		if !validPositionTimestamp(timestamp) {
+			return nil
+		}
+	}
 	if len(value) >= 10 && (value[0] == '/' || value[0] == '\\') && isBase91(value[1:9]) {
 		y := base91(value[1:5])
 		x := base91(value[5:9])
 		lat := 90 - float64(y)/380926
 		lon := -180 + float64(x)/190463
-		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9])}, value[10:])
+		if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+			return nil
+		}
+		return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9]), Timestamp: timestamp}, value[10:])
 	}
 	if len(value) < 19 {
 		return nil
 	}
-	lat, ok := coordinate(value[0:7], true)
+	lat, latAmbiguity, ok := coordinateWithAmbiguity(value[0:7], true)
 	if !ok {
 		return nil
 	}
 	if value[7] != 'N' && value[7] != 'S' {
 		return nil
 	}
-	lon, ok := coordinate(value[9:17], false)
+	lon, lonAmbiguity, ok := coordinateWithAmbiguity(value[9:17], false)
 	if !ok {
 		return nil
 	}
@@ -211,13 +250,16 @@ func ParsePosition(payload string, destination ...string) *Position {
 	if !isSymbolTable(value[8]) {
 		return nil
 	}
+	if latAmbiguity != lonAmbiguity {
+		return nil
+	}
 	if value[7] == 'S' {
 		lat = -lat
 	}
 	if value[17] == 'W' {
 		lon = -lon
 	}
-	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[8]), SymbolCode: string(value[18])}, value[19:])
+	return positionMetadata(&Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[8]), SymbolCode: string(value[18]), Timestamp: timestamp, Ambiguity: latAmbiguity}, value[19:])
 }
 
 func parseMicEPosition(destination, payload string) *Position {
@@ -389,10 +431,33 @@ func isSymbolTable(value byte) bool {
 func positionMetadata(position *Position, comment string) *Position {
 	position.Comment = strings.TrimSpace(comment)
 	position.Locator = maidenhead(position.Latitude, position.Longitude)
-	if strings.HasPrefix(position.Comment, "#PHG") && len(position.Comment) >= 8 {
-		position.PHG = position.Comment[1:8]
-		position.Comment = strings.TrimSpace(position.Comment[8:])
+	for {
+		comment := position.Comment
+		switch {
+		case len(comment) >= 8 && strings.HasPrefix(comment, "#PHG") && isDigits(comment[4:8]):
+			position.PHG = comment[1:8]
+			position.Comment = strings.TrimSpace(comment[8:])
+		case len(comment) >= 7 && strings.HasPrefix(comment, "PHG") && isDigits(comment[3:7]):
+			position.PHG = comment[:7]
+			position.Comment = strings.TrimSpace(comment[7:])
+		case len(comment) >= 9 && strings.HasPrefix(comment, "/A=") && isDigits(comment[3:9]):
+			altitude, _ := strconv.Atoi(comment[3:9])
+			position.AltitudeFt = &altitude
+			position.Comment = strings.TrimSpace(comment[9:])
+		case len(comment) >= 7 && comment[3] == '/' && isDigits(comment[:3]) && isDigits(comment[4:7]):
+			course, _ := strconv.Atoi(comment[:3])
+			speed, _ := strconv.Atoi(comment[4:7])
+			position.Course = &course
+			position.SpeedKnots = &speed
+			position.Comment = strings.TrimSpace(comment[7:])
+		case position.SymbolTable == "/" && position.SymbolCode == "\\" && parseDFExtension(position, comment):
+		default:
+			return positionMetadataURL(position)
+		}
 	}
+}
+
+func positionMetadataURL(position *Position) *Position {
 	lower := strings.ToLower(position.Comment)
 	for _, scheme := range []string{"http://", "https://"} {
 		if start := strings.Index(lower, scheme); start >= 0 {
@@ -402,6 +467,32 @@ func positionMetadata(position *Position, comment string) *Position {
 		}
 	}
 	return position
+}
+
+func parseDFExtension(position *Position, comment string) bool {
+	parts := strings.SplitN(comment, "/", 3)
+	if len(parts) != 3 || len(parts[1]) != 3 || len(parts[2]) < 3 || !isDigits(parts[1]) || !isDigits(parts[2][:3]) {
+		return false
+	}
+	bearing, _ := strconv.Atoi(parts[1])
+	number := int(parts[2][0] - '0')
+	rangeValue := int(parts[2][1] - '0')
+	quality := int(parts[2][2] - '0')
+	position.DFBearing, position.DFNumber, position.DFRange, position.DFQuality = &bearing, &number, &rangeValue, &quality
+	position.Comment = strings.TrimSpace(parts[2][3:])
+	return true
+}
+
+func isDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := range value {
+		if value[index] < '0' || value[index] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func maidenhead(latitude, longitude float64) string {
@@ -437,6 +528,38 @@ func positionStart(payload string) int {
 	}
 }
 
+func validPositionTimestamp(value string) bool {
+	if len(value) != 7 {
+		return false
+	}
+	switch value[6] {
+	case 'z', '/':
+		return validDigits(value[:6], 31, 23, 59)
+	case 'h':
+		return validDigits(value[:6], 0, 23, 59)
+	default:
+		return false
+	}
+}
+
+func validDigits(value string, maxDay, maxHour, maxMinute int) bool {
+	if len(value) != 6 {
+		return false
+	}
+	for index := range value {
+		if value[index] < '0' || value[index] > '9' {
+			return false
+		}
+	}
+	first, _ := strconv.Atoi(value[:2])
+	second, _ := strconv.Atoi(value[2:4])
+	third, _ := strconv.Atoi(value[4:6])
+	if maxDay > 0 {
+		return first >= 1 && first <= maxDay && second <= maxHour && third <= maxMinute
+	}
+	return first <= maxHour && second <= maxMinute && third <= 59
+}
+
 func isBase91(value string) bool {
 	for _, char := range value {
 		if char < '!' || char > '}' {
@@ -457,35 +580,65 @@ func packetType(payload string, position *Position, weather *Weather) string {
 	if payload == "" {
 		return "unknown"
 	}
+	if payload[0] == ';' {
+		return "object"
+	}
+	if payload[0] == ')' {
+		return "item"
+	}
 	if weather != nil || payload[0] == '_' || position != nil && position.SymbolCode == "_" {
 		return "weather"
 	}
 	switch payload[0] {
-	case '!', '=', '/', '@':
+	case '!', '=':
+		if position == nil {
+			if payload[0] == '!' && (strings.HasPrefix(payload, "!#") || strings.HasPrefix(payload, "!$") || strings.HasPrefix(payload, "!*")) {
+				return "raw-weather"
+			}
+			return "raw-weather"
+		}
+		if position.SymbolTable == "/" && position.SymbolCode == "\\" {
+			return "df"
+		}
+		return "position"
+	case '/', '@':
+		if position == nil {
+			return "unknown"
+		}
+		if position.SymbolTable == "/" && position.SymbolCode == "\\" {
+			return "df"
+		}
 		return "position"
 	case '$':
+		if strings.HasPrefix(payload, "$ULTW") {
+			return "raw-weather"
+		}
 		return "raw-gps"
 	case '%':
 		return "agrelo-dfjr"
 	case '&':
 		return "peet-bros"
+	case '#', '*':
+		return "raw-weather"
 	case '\'', '`':
 		return "mic-e"
 	case ':':
-		if separator := strings.Index(payload[1:], ":"); separator >= 0 {
-			text := strings.ToLower(payload[separator+2:])
+		if data := ParseAPRSMessage(payload); data != nil {
 			switch {
-			case strings.HasPrefix(text, "ack"):
+			case strings.HasPrefix(strings.ToLower(data.Text), "ack"):
 				return "ack"
-			case strings.HasPrefix(text, "rej"):
+			case strings.HasPrefix(strings.ToLower(data.Text), "rej"):
 				return "reject"
+			case strings.HasPrefix(strings.ToUpper(data.Addressee), "NWS-"):
+				return "weather-bulletin"
+			case strings.HasPrefix(strings.ToUpper(data.Addressee), "BLN"):
+				if len(data.Addressee) > 3 && data.Addressee[3] >= 'A' && data.Addressee[3] <= 'Z' {
+					return "announcement"
+				}
+				return "bulletin"
 			}
 		}
 		return "message"
-	case ';':
-		return "object"
-	case ')':
-		return "item"
 	case '<':
 		return "capabilities"
 	case '>':
@@ -520,7 +673,16 @@ func packetType(payload string, position *Position, weather *Weather) string {
 		if strings.HasPrefix(payload, "BITS.") {
 			return "telemetry"
 		}
-	case '"', '#', '(', '*', '+', ',', '-', '.', '\\', ']', '^':
+	case '+':
+		return "shelter"
+	case '.':
+		return "space-weather"
+	case ',', '"', '(', '-', '\\', ']', '^':
+		return "reserved"
+	case 0x1c, 0x1d:
+		return "mic-e"
+	}
+	if payload[0] >= '0' && payload[0] <= '9' || payload[0] >= 'A' && payload[0] <= 'S' || payload[0] >= 'U' && payload[0] <= 'Z' || payload[0] == '~' {
 		return "reserved"
 	}
 	return "unknown"
@@ -532,63 +694,173 @@ func ParseTelemetry(payload string) *Telemetry {
 		if len(parts) < 7 {
 			return nil
 		}
-		sequence, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return nil
-		}
-		telemetry := &Telemetry{Sequence: sequence, Digital: parts[6]}
+		sequence, sequenceLabel := parseTelemetrySequence(parts[0])
+		telemetry := &Telemetry{Sequence: sequence, SequenceLabel: sequenceLabel, Digital: strings.TrimSpace(parts[6])}
 		for _, value := range parts[1:6] {
-			number, err := strconv.Atoi(value)
+			number, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
 				return nil
 			}
-			telemetry.Analog = append(telemetry.Analog, number)
+			telemetry.AnalogValues = append(telemetry.AnalogValues, number)
+			telemetry.Analog = append(telemetry.Analog, int(number))
 		}
 		return telemetry
 	}
-	if strings.HasPrefix(payload, "PARM.") || strings.HasPrefix(payload, "UNIT.") || strings.HasPrefix(payload, "BITS.") {
+	if strings.HasPrefix(payload, "PARM.") || strings.HasPrefix(payload, "UNIT.") || strings.HasPrefix(payload, "EQNS.") || strings.HasPrefix(payload, "BITS.") {
 		telemetry := &Telemetry{}
-		values := strings.SplitN(payload[5:], ",", 2)
+		values := strings.Split(strings.TrimSpace(payload[5:]), ",")
 		if strings.HasPrefix(payload, "PARM.") {
 			telemetry.Parameters = values
 		}
 		if strings.HasPrefix(payload, "UNIT.") {
 			telemetry.Units = values
 		}
+		if strings.HasPrefix(payload, "EQNS.") {
+			if len(values)%3 != 0 {
+				return nil
+			}
+			for i := 0; i < len(values); i += 3 {
+				coefficients := make([]float64, 3)
+				for j := range coefficients {
+					value, err := strconv.ParseFloat(strings.TrimSpace(values[i+j]), 64)
+					if err != nil {
+						return nil
+					}
+					coefficients[j] = value
+				}
+				telemetry.Coefficients = append(telemetry.Coefficients, coefficients)
+			}
+		}
 		if strings.HasPrefix(payload, "BITS.") {
 			telemetry.Bits = strings.TrimSpace(payload[5:])
 		}
 		return telemetry
 	}
+	if start := strings.Index(payload, "|"); start >= 0 {
+		if end := strings.Index(payload[start+1:], "|"); end >= 0 {
+			encoded := payload[start+1 : start+1+end]
+			if len(encoded) >= 4 && len(encoded)%2 == 0 && len(encoded) <= 14 && isBase91(encoded) {
+				values := make([]int, len(encoded)/2)
+				for i := range values {
+					values[i] = base91(encoded[i*2 : i*2+2])
+					if values[i] > 8280 {
+						return nil
+					}
+				}
+				telemetry := &Telemetry{Sequence: values[0], Base91: true}
+				channelCount := len(values) - 1
+				if channelCount > 6 {
+					return nil
+				}
+				if channelCount == 6 {
+					channelCount--
+					telemetry.Digital = base91DigitalBits(values[len(values)-1])
+				}
+				telemetry.Analog = append(telemetry.Analog, values[1:1+channelCount]...)
+				for _, value := range values[1 : 1+channelCount] {
+					telemetry.AnalogValues = append(telemetry.AnalogValues, float64(value))
+				}
+				return telemetry
+			}
+		}
+	}
 	return nil
 }
 
+func base91DigitalBits(value int) string {
+	bits := []byte("00000000")
+	for index := range bits {
+		if value&(1<<index) != 0 {
+			bits[index] = '1'
+		}
+	}
+	return string(bits)
+}
+
 func coordinate(value string, latitude bool) (float64, bool) {
+	result, _, ok := coordinateWithAmbiguity(value, latitude)
+	return result, ok
+}
+
+func coordinateWithAmbiguity(value string, latitude bool) (float64, int, bool) {
 	if latitude && len(value) != 7 || !latitude && len(value) != 8 {
-		return 0, false
+		return 0, 0, false
 	}
 	degreeWidth := 2
 	if !latitude {
 		degreeWidth = 3
 	}
-	degrees, err := strconv.ParseFloat(value[:degreeWidth], 64)
-	minutes, err2 := strconv.ParseFloat(value[degreeWidth:], 64)
-	if err != nil || err2 != nil || minutes >= 60 {
-		return 0, false
+	degrees, err := strconv.Atoi(value[:degreeWidth])
+	if err != nil {
+		return 0, 0, false
 	}
-	return degrees + minutes/60, true
+	minutesText := value[degreeWidth:]
+	minutesDigits := minutesText[:2] + minutesText[3:]
+	ambiguity := strings.Count(minutesText, " ")
+	if strings.Count(minutesText, ".") != 1 || minutesText[2] != '.' || ambiguity > 4 {
+		return 0, 0, false
+	}
+	allowedSpaces := map[int]bool{}
+	switch ambiguity {
+	case 0:
+	case 1:
+		allowedSpaces[3] = true
+	case 2:
+		allowedSpaces[2], allowedSpaces[3] = true, true
+	case 3:
+		allowedSpaces[1], allowedSpaces[2], allowedSpaces[3] = true, true, true
+	case 4:
+		allowedSpaces[0], allowedSpaces[1], allowedSpaces[2], allowedSpaces[3] = true, true, true, true
+	default:
+		return 0, 0, false
+	}
+	for i, char := range minutesDigits {
+		if char == ' ' && !allowedSpaces[i] {
+			return 0, 0, false
+		}
+		if char != ' ' && (char < '0' || char > '9') {
+			return 0, 0, false
+		}
+	}
+	normalized := strings.ReplaceAll(minutesText, " ", "0")
+	minutes, err := strconv.ParseFloat(normalized, 64)
+	if err != nil || minutes >= 60 {
+		return 0, 0, false
+	}
+	switch ambiguity {
+	case 1:
+		minutes += 0.005
+	case 2:
+		minutes += 0.05
+	case 3:
+		minutes += 5
+	case 4:
+		minutes += 30
+	}
+	maxDegrees := 90
+	if !latitude {
+		maxDegrees = 180
+	}
+	if degrees > maxDegrees || degrees == maxDegrees && minutes > 0 || minutes >= 60 {
+		return 0, 0, false
+	}
+	return float64(degrees) + minutes/60, ambiguity, true
 }
 
 var weatherPatterns = map[string]*regexp.Regexp{
-	"temperature": regexp.MustCompile(`(?i)t(-?\d{3})`),
-	"direction":   regexp.MustCompile(`(?i)d(\d{3})`),
-	"speed":       regexp.MustCompile(`(?i)s(\d{3})`),
-	"windSlash":   regexp.MustCompile(`(\d{3})/(\d{3})`),
-	"gust":        regexp.MustCompile(`(?i)g(\d{3})`),
-	"rainHour":    regexp.MustCompile(`(?i)r(\d{3})`),
-	"rain24":      regexp.MustCompile(`(?i)p(\d{3})`),
-	"humidity":    regexp.MustCompile(`(?i)h(\d{2})`),
-	"pressure":    regexp.MustCompile(`(?i)b(\d{5})`),
+	"temperature":    regexp.MustCompile(`(?i)t(-?\d{3,4})`),
+	"direction":      regexp.MustCompile(`(?i)d(\d{3,4})`),
+	"speed":          regexp.MustCompile(`(?i)s(\d{3,4})`),
+	"windSlash":      regexp.MustCompile(`(\d{3})/(\d{3})`),
+	"gust":           regexp.MustCompile(`(?i)g(\d{3,4})`),
+	"rainHour":       regexp.MustCompile(`(?i)r(\d{3,4})`),
+	"rain24":         regexp.MustCompile(`p(\d{3,4})`),
+	"rainMidnight":   regexp.MustCompile(`P(\d{3,4})`),
+	"humidity":       regexp.MustCompile(`(?i)h(\d{2,3})`),
+	"pressure":       regexp.MustCompile(`(?i)b(\d{5,6})`),
+	"luminosity":     regexp.MustCompile(`L(\d{3})`),
+	"luminosityHigh": regexp.MustCompile(`l(\d{3})`),
+	"windDirection":  regexp.MustCompile(`(?i)c(\d{3,4})`),
 }
 
 func ParseWeather(payload string) *Weather {
@@ -611,7 +883,13 @@ func ParseWeather(payload string) *Weather {
 		weather.WindKnots = &speed
 		found = true
 	}
-	for name, pattern := range weatherPatterns {
+	names := make([]string, 0, len(weatherPatterns))
+	for name := range weatherPatterns {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		pattern := weatherPatterns[name]
 		if name == "temperature" {
 			continue
 		}
@@ -622,9 +900,11 @@ func ParseWeather(payload string) *Weather {
 				weather.WindDirection = &value
 			case "speed":
 				weather.WindSpeedKnots = &value
+				weather.WindSpeedMph = &value
 				weather.WindKnots = &value
 			case "gust":
 				weather.GustKnots = &value
+				weather.GustMph = &value
 			case "rainHour":
 				weather.RainLastHour = &value
 				millimeters := float64(value) * 0.254
@@ -633,22 +913,68 @@ func ParseWeather(payload string) *Weather {
 				weather.Rain24Hours = &value
 				millimeters := float64(value) * 0.254
 				weather.Rain24HoursMm = &millimeters
+			case "rainMidnight":
+				weather.RainSinceMidnight = &value
+				millimeters := float64(value) * 0.254
+				weather.RainSinceMidnightMm = &millimeters
 			case "humidity":
+				if value == 0 {
+					value = 100
+				}
 				weather.Humidity = &value
 			case "pressure":
 				pressure := float64(value) / 10
 				weather.PressureHpa = &pressure
+			case "luminosity":
+				weather.Luminosity = &value
+			case "luminosityHigh":
+				value += 1000
+				weather.Luminosity = &value
+			case "windDirection":
+				weather.WindDirection = &value
 			}
 			found = true
 		}
 	}
+	weather.Software, weather.Unit = parseWeatherStationInfo(payload)
 	if !found {
 		return nil
 	}
 	return weather
 }
 
-var weatherFields = regexp.MustCompile(`(?i)(\d{3}/\d{3}|g\d{3}|t-?\d{3}|r\d{3}|p\d{3}|P\d{3}|b\d{5}|h\d{2})`)
+var weatherFields = regexp.MustCompile(`(?i)(\d{3}/\d{3}|[cdgprs]\d{3,4}|t-?\d{3,4}|P\d{3,4}|b\d{5,6}|h\d{2,3}|[Ll]\d{3})`)
+
+func ParseWeatherForMessage(payload string, position *Position) *Weather {
+	if strings.HasPrefix(payload, "_") || position != nil && position.SymbolCode == "_" {
+		return ParseWeather(payload)
+	}
+	return nil
+}
+
+func parseWeatherStationInfo(payload string) (string, string) {
+	marker := strings.LastIndexByte(payload, 'w')
+	if marker < 0 {
+		return "", ""
+	}
+	metadata := payload[marker+1:]
+	if len(metadata) < 3 || len(metadata) > 5 {
+		return "", ""
+	}
+	software, unit := "", metadata
+	if strings.Contains("dMPSWX", metadata[:1]) {
+		software, unit = metadata[:1], metadata[1:]
+	}
+	if len(unit) < 1 || len(unit) > 4 {
+		return "", ""
+	}
+	for index := range unit {
+		if !isSymbolTable(unit[index]) && unit[index] != '-' {
+			return "", ""
+		}
+	}
+	return software, unit
+}
 
 func DecodeCallsign(address []byte) string {
 	call := make([]byte, 6)

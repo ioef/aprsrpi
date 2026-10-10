@@ -4,10 +4,18 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ParseTNC2 parses the text packet format used by APRS-IS servers.
 func ParseTNC2(line string) (Message, bool) {
+	return parseTNC2(line, 0)
+}
+
+func parseTNC2(line string, depth int) (Message, bool) {
+	if depth > 4 {
+		return Message{}, false
+	}
 	parts := strings.SplitN(strings.TrimSpace(line), ":", 2)
 	if len(parts) != 2 {
 		return Message{}, false
@@ -20,23 +28,78 @@ func ParseTNC2(line string) (Message, bool) {
 	if len(addresses) == 0 || strings.TrimSpace(header[0]) == "" {
 		return Message{}, false
 	}
-	message := Message{Source: strings.TrimSpace(header[0]), Destination: strings.TrimSpace(addresses[0]), Path: strings.Join(addresses[1:], " > "), Payload: CleanPayload([]byte(parts[1])), Raw: line, Kind: "packet", Icon: "radio"}
-	message.Position = ParsePosition(message.Payload, message.Destination)
-	if strings.HasPrefix(message.Payload, "_") || message.Position != nil && message.Position.SymbolCode == "_" {
-		message.Weather = ParseWeather(message.Payload)
+	return parseMessage(strings.TrimSpace(header[0]), strings.TrimSpace(addresses[0]), strings.Join(addresses[1:], " > "), parts[1], line, depth), true
+}
+
+func parseMessage(source, destination, path, payload, raw string, depth int) Message {
+	firstByte := byte(0)
+	if len(payload) > 0 {
+		firstByte = payload[0]
 	}
+	payload = CleanPayload([]byte(payload))
+	message := Message{
+		Received:    time.Now().UTC().Format(time.RFC3339),
+		Source:      source,
+		Destination: destination,
+		Path:        path,
+		Payload:     payload,
+		Raw:         raw,
+		Kind:        "packet",
+		Icon:        "radio",
+	}
+	message.Position = ParsePosition(payload, destination)
+	message.Weather = ParseWeatherForMessage(payload, message.Position)
 	if message.Position != nil {
 		message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
 	}
 	if message.Weather != nil {
 		message.Kind, message.Icon = "weather", "weather"
 	}
-	if strings.HasPrefix(message.Payload, ":") {
-		message.Kind, message.Icon = "message", "message"
-		message.IsMessage = true
+	message.Type = packetType(payload, message.Position, message.Weather)
+	if firstByte == 0x1c || firstByte == 0x1d {
+		message.Type = "mic-e"
 	}
-	message.Type = packetType(message.Payload, message.Position, message.Weather)
-	return message, true
+	message.Telemetry = ParseTelemetry(payload)
+	message.APRSMessage = ParseAPRSMessage(payload)
+	if message.APRSMessage != nil {
+		if strings.HasPrefix(message.APRSMessage.Text, "PARM.") ||
+			strings.HasPrefix(message.APRSMessage.Text, "UNIT.") ||
+			strings.HasPrefix(message.APRSMessage.Text, "EQNS.") ||
+			strings.HasPrefix(message.APRSMessage.Text, "BITS.") {
+			message.Telemetry = ParseTelemetry(message.APRSMessage.Text)
+		}
+		message.IsMessage = true
+		if message.Type == "message" || message.Type == "ack" || message.Type == "reject" || message.Type == "bulletin" || message.Type == "announcement" || message.Type == "weather-bulletin" {
+			message.Kind, message.Icon = "message", "message"
+		}
+	}
+	if strings.HasPrefix(payload, ":") {
+		message.IsMessage = true
+		message.Kind, message.Icon = "message", "message"
+	}
+	message.Object = ParseObject(payload, destination)
+	if message.Object != nil {
+		message.Position = message.Object.Position
+		message.Symbol = ""
+		if message.Position != nil {
+			message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
+		}
+	}
+	if strings.HasPrefix(payload, ">") {
+		message.StatusText = strings.TrimSpace(payload[1:])
+	}
+	if strings.HasPrefix(payload, "?") {
+		message.Query = strings.TrimSpace(payload[1:])
+	}
+	if strings.HasPrefix(payload, "[") {
+		message.GridLocator = ParseGridLocator(payload[1:])
+	}
+	if strings.HasPrefix(payload, "}") {
+		if thirdParty, ok := parseTNC2(payload[1:], depth+1); ok {
+			message.ThirdParty = &thirdParty
+		}
+	}
+	return message
 }
 func TNC2(message Message) string {
 	header := message.Source + ">" + message.Destination

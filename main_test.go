@@ -27,6 +27,14 @@ func TestPublishMessageKeepsWeatherPacketLatest(t *testing.T) {
 	}
 }
 
+func TestPublishMessageDoesNotTreatArbitraryTextAsWeather(t *testing.T) {
+	hub := gateway.NewHub()
+	publishMessage(hub, aprs.Message{Source: "N0CALL", Payload: "station t073 is ready"})
+	if got := len(hub.Snapshot()); got != 1 {
+		t.Fatalf("published %d messages, want only the original packet", got)
+	}
+}
+
 func TestRFUploadRewritesInternetPath(t *testing.T) {
 	message := aprs.Message{Source: "SV2HNH", Destination: "APDW18", Path: "WIDE1-1 > qAO > SV4IMN-2", Payload: "!test"}
 	got := rfUpload(message, "SV2JLD")

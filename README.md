@@ -54,12 +54,14 @@ The following examples show the physical station and the main APRS kiosk views.
 
 ## Go packages
 
-- `internal/aprs`: KISS framing, AX.25 addresses, APRS payload parsing, weather extraction, and outbound message encoding.
+- `internal/aprs`: KISS framing, AX.25 addresses, APRS data-type parsing, position/weather/telemetry extraction, and outbound message encoding.
 - `internal/bot`: addressed command matching, acknowledgements, replies, weather/ISS lookups, tips, and repeaters.
 - `internal/gateway`: message history and Server-Sent Events for the Vue kiosk.
 - `internal/aprsis`: persistent APRS-IS login, filtering, heartbeats, reconnects, and bounded writes.
 - `internal/policy`: duplicate suppression, recently-heard tracking, and transmit limiting.
 - `main.go`: Raspberry Pi device lifecycle, HTTP wiring, KISS reconnect loop, native igate, and native digipeating.
+
+The APRS parser handles the standard information-field data types in the APRS Protocol Reference, including positions (timestamped, compressed, and ambiguous), weather, telemetry, messages and bulletins, objects/items, queries, status, grid locators, and third-party packets. It keeps the original payload for display and forwarding. Vendor-specific raw weather formats and user-defined payloads are retained and classified where possible; their opaque application data is not decoded without a format definition.
 
 ## Run locally
 

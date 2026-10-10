@@ -136,19 +136,21 @@ func formatCoordinate(value float64, latitude bool) string {
 }
 
 func publishMessage(hub *gateway.Hub, message aprs.Message) {
-	if report := weatherReport(message.Payload); report != "" {
-		hub.Publish(aprs.Message{
-			Source:      message.Source,
-			Destination: message.Destination,
-			Type:        "weather",
-			Payload:     report,
-		})
+	if message.Weather != nil {
+		if report := weatherReport(message.Payload); report != "" {
+			hub.Publish(aprs.Message{
+				Source:      message.Source,
+				Destination: message.Destination,
+				Type:        "weather",
+				Payload:     report,
+			})
+		}
 	}
 	hub.Publish(message)
 }
 
 func weatherReport(payload string) string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 9)
 	for _, field := range []struct {
 		marker byte
 		width  int
@@ -160,6 +162,9 @@ func weatherReport(payload string) string {
 		{'s', 3, "Wind"},
 		{'g', 3, "Gust"},
 		{'c', 3, "Direction"},
+		{'r', 3, "Rain last hour"},
+		{'p', 3, "Rain last 24 hours"},
+		{'P', 3, "Rain since midnight"},
 	} {
 		for i := 0; i+1+field.width <= len(payload); i++ {
 			if payload[i] != field.marker || (i > 0 && payload[i-1] >= 'a' && payload[i-1] <= 'z') {
@@ -183,6 +188,8 @@ func weatherReport(payload string) string {
 				fields = append(fields, fmt.Sprintf("%s: %d mph", field.label, value))
 			case 'c':
 				fields = append(fields, fmt.Sprintf("%s: %d°", field.label, value))
+			case 'r', 'p', 'P':
+				fields = append(fields, fmt.Sprintf("%s: %.2f mm", field.label, float64(value)*0.254))
 			}
 			break
 		}
