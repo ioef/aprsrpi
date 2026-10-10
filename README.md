@@ -312,7 +312,7 @@ journalctl -u aprsrpi -f
 The backend listens on `http://localhost:8080`. Start Chromium in kiosk mode from the Pi desktop session:
 
 ```sh
-chromium --kiosk --noerrdialogs --disable-infobars http://localhost:8080
+chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8080
 ```
 
 For automatic graphical startup, add that command to the desktop session's autostart configuration. The Go backend reconnects automatically when the KISS TNC becomes available.

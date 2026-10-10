@@ -68,7 +68,7 @@ cat > "$USER_HOME/.config/autostart/aprsrpi-kiosk.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=APRS RPi Kiosk
-Exec=chromium --kiosk --noerrdialogs --disable-infobars http://localhost:8080
+Exec=chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8080
 Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF
