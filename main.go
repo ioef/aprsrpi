@@ -150,54 +150,74 @@ func publishMessage(hub *gateway.Hub, message aprs.Message) {
 }
 
 func weatherReport(payload string) string {
-	fields := make([]string, 0, 9)
-	for _, field := range []struct {
-		marker byte
-		width  int
-		label  string
-	}{
-		{'t', 3, "Temperature"},
-		{'h', 2, "Humidity"},
-		{'b', 5, "Pressure"},
-		{'s', 3, "Wind"},
-		{'g', 3, "Gust"},
-		{'c', 3, "Direction"},
-		{'r', 3, "Rain last hour"},
-		{'p', 3, "Rain last 24 hours"},
-		{'P', 3, "Rain since midnight"},
-	} {
-		for i := 0; i+1+field.width <= len(payload); i++ {
-			if payload[i] != field.marker || (i > 0 && payload[i-1] >= 'a' && payload[i-1] <= 'z') {
-				continue
-			}
-			value, err := strconv.Atoi(payload[i+1 : i+1+field.width])
-			if err != nil {
-				continue
-			}
-			switch field.marker {
-			case 't':
-				fields = append(fields, fmt.Sprintf("%s: %d°F", field.label, value))
-			case 'h':
-				if value == 0 {
-					value = 100
-				}
-				fields = append(fields, fmt.Sprintf("%s: %d%%", field.label, value))
-			case 'b':
-				fields = append(fields, fmt.Sprintf("%s: %.1f hPa", field.label, float64(value)/10))
-			case 's', 'g':
-				fields = append(fields, fmt.Sprintf("%s: %d mph", field.label, value))
-			case 'c':
-				fields = append(fields, fmt.Sprintf("%s: %d°", field.label, value))
-			case 'r', 'p', 'P':
-				fields = append(fields, fmt.Sprintf("%s: %.2f mm", field.label, float64(value)*0.254))
-			}
-			break
+	fields := make([]string, 0, len(weatherReportFields))
+	for _, field := range weatherReportFields {
+		value, ok := findWeatherField(payload, field)
+		if ok {
+			fields = append(fields, formatWeatherField(field, value))
 		}
 	}
 	if len(fields) < 2 {
 		return ""
 	}
 	return strings.Join(fields, ", ")
+}
+
+type weatherReportField struct {
+	marker byte
+	width  int
+	label  string
+}
+
+var weatherReportFields = []weatherReportField{
+	{'t', 3, "Temperature"},
+	{'h', 2, "Humidity"},
+	{'b', 5, "Pressure"},
+	{'s', 3, "Wind"},
+	{'g', 3, "Gust"},
+	{'c', 3, "Direction"},
+	{'r', 3, "Rain last hour"},
+	{'p', 3, "Rain last 24 hours"},
+	{'P', 3, "Rain since midnight"},
+}
+
+func findWeatherField(payload string, field weatherReportField) (int, bool) {
+	for index := 0; index+1+field.width <= len(payload); index++ {
+		if payload[index] != field.marker || isWeatherMarkerInWord(payload, index) {
+			continue
+		}
+		value, err := strconv.Atoi(payload[index+1 : index+1+field.width])
+		if err == nil {
+			return value, true
+		}
+	}
+	return 0, false
+}
+
+func isWeatherMarkerInWord(payload string, index int) bool {
+	return index > 0 && payload[index-1] >= 'a' && payload[index-1] <= 'z'
+}
+
+func formatWeatherField(field weatherReportField, value int) string {
+	switch field.marker {
+	case 't':
+		return fmt.Sprintf("%s: %d°F", field.label, value)
+	case 'h':
+		if value == 0 {
+			value = 100
+		}
+		return fmt.Sprintf("%s: %d%%", field.label, value)
+	case 'b':
+		return fmt.Sprintf("%s: %.1f hPa", field.label, float64(value)/10)
+	case 's', 'g':
+		return fmt.Sprintf("%s: %d mph", field.label, value)
+	case 'c':
+		return fmt.Sprintf("%s: %d°", field.label, value)
+	case 'r', 'p', 'P':
+		return fmt.Sprintf("%s: %.2f mm", field.label, float64(value)*0.254)
+	default:
+		return ""
+	}
 }
 
 func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, radio *radioWriter, isClient *aprsis.Client, seenRF, seenDigi *policy.Cache, limiter *policy.Limiter, windowLimiter *policy.WindowLimiter, heard *policy.Heard) {

@@ -63,6 +63,41 @@ The following examples show the physical station and the main APRS kiosk views.
 
 The APRS parser handles the standard information-field data types in the APRS Protocol Reference, including positions (timestamped, compressed, and ambiguous), weather, telemetry, messages and bulletins, objects/items, queries, status, grid locators, and third-party packets. It keeps the original payload for display and forwarding. Vendor-specific raw weather formats and user-defined payloads are retained and classified where possible; their opaque application data is not decoded without a format definition.
 
+## APRS frame diagram
+
+On a KISS connection, the AX.25 frame is bracketed and escaped by KISS. The KISS command byte is transport framing, not part of the AX.25 packet:
+
+```text
+KISS byte stream
+┌────────┬────────────────┬─────────────────────────────────────────────┬────────┐
+│ FEND   │ Port + command │ Escaped AX.25 frame                         │ FEND   │
+│ 0xC0   │ commonly 0x00  │ (KISS escapes 0xC0 and 0xDB inside the data)│ 0xC0   │
+└────────┴────────────────┴─────────────────────────────────────────────┴────────┘
+                                  │ unescape KISS data
+                                  ▼
+AX.25 UI frame
+┌───────────┬───────────┬────────────────────┬─────────┬─────┬─────────────────────┐
+│ Address   │ Address   │ 0 or more repeater │ Control │ PID │ APRS information    │
+│ dest (7B) │ source(7B)│ addresses (7B each)│ 0x03    │ 0xF0│ field (variable)    │
+└───────────┴───────────┴────────────────────┴─────────┴─────┴─────────────────────┘
+                                                                    │
+                                                                    ▼
+APRS information field
+┌────────────────────┬─────────────────────────┬──────────────────────────────┐
+│ Data-type          │ Type-specific data      │ Optional comment / extension │
+│ identifier (DTI)   │ position, message, WX,  │                              │
+│ e.g. ! @ : ; _     │ telemetry, object, etc. │                              │
+└────────────────────┴─────────────────────────┴──────────────────────────────┘
+```
+
+Each AX.25 address is seven octets: six shifted callsign characters and one SSID/control octet. In the final address, the address-extension bit marks the end of the address list; repeater addresses also carry the repeated/H bit. The APRS information field is not a fixed layout: its DTI selects how the remaining bytes are interpreted. For example, a timestamped weather report starts with `@`, followed by its timestamp and position, then the `_` weather symbol and weather fields.
+
+APRS-IS represents the same packet using TNC2 text rather than KISS/AX.25 bytes:
+
+```text
+SOURCE>DESTINATION[,DIGI1,DIGI2,...]:APRS-information-field
+```
+
 ## Run locally
 
 ```sh

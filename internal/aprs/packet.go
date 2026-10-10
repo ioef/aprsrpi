@@ -47,6 +47,13 @@ func parseMessage(source, destination, path, payload, raw string, depth int) Mes
 		Kind:        "packet",
 		Icon:        "radio",
 	}
+	applyPositionAndWeather(&message, payload, destination, firstByte)
+	applyStructuredPayload(&message, payload, destination)
+	applyPacketMetadata(&message, payload, depth)
+	return message
+}
+
+func applyPositionAndWeather(message *Message, payload, destination string, firstByte byte) {
 	message.Position = ParsePosition(payload, destination)
 	message.Weather = ParseWeatherForMessage(payload, message.Position)
 	if message.Position != nil {
@@ -56,20 +63,18 @@ func parseMessage(source, destination, path, payload, raw string, depth int) Mes
 		message.Kind, message.Icon = "weather", "weather"
 	}
 	message.Type = packetType(payload, message.Position, message.Weather)
-	if firstByte == 0x1c || firstByte == 0x1d {
+	if firstByte == dataTypeMicECurrentControl || firstByte == dataTypeMicEOldControl {
 		message.Type = "mic-e"
 	}
+}
+
+func applyStructuredPayload(message *Message, payload, destination string) {
 	message.Telemetry = ParseTelemetry(payload)
 	message.APRSMessage = ParseAPRSMessage(payload)
 	if message.APRSMessage != nil {
-		if strings.HasPrefix(message.APRSMessage.Text, "PARM.") ||
-			strings.HasPrefix(message.APRSMessage.Text, "UNIT.") ||
-			strings.HasPrefix(message.APRSMessage.Text, "EQNS.") ||
-			strings.HasPrefix(message.APRSMessage.Text, "BITS.") {
-			message.Telemetry = ParseTelemetry(message.APRSMessage.Text)
-		}
+		applyTelemetryMessage(message, message.APRSMessage.Text)
 		message.IsMessage = true
-		if message.Type == "message" || message.Type == "ack" || message.Type == "reject" || message.Type == "bulletin" || message.Type == "announcement" || message.Type == "weather-bulletin" {
+		if isMessagePacketType(message.Type) {
 			message.Kind, message.Icon = "message", "message"
 		}
 	}
@@ -80,26 +85,51 @@ func parseMessage(source, destination, path, payload, raw string, depth int) Mes
 	message.Object = ParseObject(payload, destination)
 	if message.Object != nil {
 		message.Position = message.Object.Position
-		message.Symbol = ""
-		if message.Position != nil {
-			message.Symbol = message.Position.SymbolTable + message.Position.SymbolCode
+		message.Symbol = symbolForPosition(message.Position)
+	}
+}
+
+func applyTelemetryMessage(message *Message, text string) {
+	for _, prefix := range []string{"PARM.", "UNIT.", "EQNS.", "BITS."} {
+		if strings.HasPrefix(text, prefix) {
+			message.Telemetry = ParseTelemetry(text)
+			return
 		}
 	}
-	if strings.HasPrefix(payload, ">") {
-		message.StatusText = strings.TrimSpace(payload[1:])
+}
+
+func isMessagePacketType(packetType string) bool {
+	switch packetType {
+	case "message", "ack", "reject", "bulletin", "announcement", "weather-bulletin":
+		return true
+	default:
+		return false
 	}
-	if strings.HasPrefix(payload, "?") {
-		message.Query = strings.TrimSpace(payload[1:])
+}
+
+func symbolForPosition(position *Position) string {
+	if position == nil {
+		return ""
 	}
-	if strings.HasPrefix(payload, "[") {
-		message.GridLocator = ParseGridLocator(payload[1:])
+	return position.SymbolTable + position.SymbolCode
+}
+
+func applyPacketMetadata(message *Message, payload string, depth int) {
+	if strings.HasPrefix(payload, string(dataTypeStatus)) {
+		message.StatusText = strings.TrimSpace(payload[ax25DestinationOffset:])
 	}
-	if strings.HasPrefix(payload, "}") {
-		if thirdParty, ok := parseTNC2(payload[1:], depth+1); ok {
+	if strings.HasPrefix(payload, string(dataTypeQuery)) {
+		message.Query = strings.TrimSpace(payload[ax25DestinationOffset:])
+	}
+	if strings.HasPrefix(payload, string(dataTypeGridLocator)) {
+		message.GridLocator = ParseGridLocator(payload[ax25DestinationOffset:])
+	}
+	if strings.HasPrefix(payload, string(dataTypeThirdParty)) {
+		thirdParty, ok := parseTNC2(payload[ax25DestinationOffset:], depth+1)
+		if ok {
 			message.ThirdParty = &thirdParty
 		}
 	}
-	return message
 }
 func TNC2(message Message) string {
 	header := message.Source + ">" + message.Destination
@@ -124,66 +154,97 @@ func EncodePacket(message Message) []byte {
 		frame = append(frame, addressWithRepeated(call, ssid, repeated, index == len(path)-1)...)
 	}
 	if len(path) == 0 {
-		frame[14] |= 1
+		frame[ax25DestinationOffset+2*ax25AddressLength-1] |= ax25LastAddressMask
 	}
-	frame = append(frame, 0x03, 0xf0)
+	frame = append(frame, ax25ControlField, ax25NoLayer3Protocol)
 	frame = append(frame, []byte(message.Payload)...)
-	encoded := []byte{0xc0}
+	encoded := []byte{ax25FrameFlag}
 	for _, value := range frame {
 		switch value {
-		case 0xc0:
-			encoded = append(encoded, 0xdb, 0xdc)
-		case 0xdb:
-			encoded = append(encoded, 0xdb, 0xdd)
+		case ax25FrameFlag:
+			encoded = append(encoded, ax25EscapeByte, ax25EscapedFrameFlag)
+		case ax25EscapeByte:
+			encoded = append(encoded, ax25EscapeByte, ax25EscapedEscapeByte)
 		default:
 			encoded = append(encoded, value)
 		}
 	}
-	return append(encoded, 0xc0)
+	return append(encoded, ax25FrameFlag)
 }
 
 func Digipeat(frame []byte, callsign string, aliases []string, hopLimits ...int) ([]byte, bool) {
 	offset := 1
-	maxHops := 7
-	if len(hopLimits) > 0 && hopLimits[0] > 0 {
-		maxHops = hopLimits[0]
-	}
-	for addressIndex := 0; offset+7 <= len(frame); addressIndex++ {
-		address := frame[offset : offset+7]
-		last := address[6]&1 == 1
-		if addressIndex >= 2 && address[6]&0x80 == 0 {
+	maxHops := digipeaterHopLimit(hopLimits)
+	for addressIndex := 0; offset+ax25AddressLength <= len(frame); addressIndex++ {
+		address := frame[offset : offset+ax25AddressLength]
+		last := address[ax25AddressExtension]&ax25LastAddressMask != 0
+		if repeatedAddress(addressIndex, address) {
 			name := DecodeCallsign(address)
-			for _, alias := range aliases {
-				if strings.EqualFold(name, strings.TrimSuffix(alias, "*")) {
-					call, ssid := SplitCallsign(callsign)
-					replacement := addressWithRepeated(call, ssid, true, last)
-					if strings.HasPrefix(strings.ToUpper(name), "WIDE2-") {
-						count, err := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(name), "WIDE2-"))
-						if err == nil && count > 1 {
-							if count > maxHops {
-								return nil, false
-							}
-							replacement = addressWithRepeated(call, ssid, true, false)
-							remaining := addressWithRepeated("WIDE2", byte(count-1), false, last)
-							result := make([]byte, len(frame)+7)
-							copy(result, frame[:offset])
-							copy(result[offset:offset+7], replacement)
-							copy(result[offset+7:offset+14], remaining)
-							copy(result[offset+14:], frame[offset+7:])
-							return result, true
-						}
-					}
-					copy(address, replacement)
-					return append([]byte(nil), frame...), true
-				}
+			if matchesAlias(name, aliases) {
+				return rewriteMatchedAlias(frame, offset, address, callsign, name, maxHops)
 			}
 		}
-		offset += 7
+		offset += ax25AddressLength
 		if last {
 			break
 		}
 	}
 	return nil, false
+}
+
+func digipeaterHopLimit(hopLimits []int) int {
+	if len(hopLimits) > 0 && hopLimits[0] > 0 {
+		return hopLimits[0]
+	}
+	return 7
+}
+
+func repeatedAddress(index int, address []byte) bool {
+	return index >= ax25AddressCountMinimum && address[ax25AddressExtension]&ax25AddressRepeatedMask == 0
+}
+
+func matchesAlias(name string, aliases []string) bool {
+	for _, alias := range aliases {
+		if strings.EqualFold(name, strings.TrimSuffix(alias, "*")) {
+			return true
+		}
+	}
+	return false
+}
+
+func rewriteMatchedAlias(frame []byte, offset int, address []byte, callsign, name string, maxHops int) ([]byte, bool) {
+	last := address[ax25AddressExtension]&ax25LastAddressMask != 0
+	count, wideTwo := wideTwoRemainingHops(name)
+	call, ssid := SplitCallsign(callsign)
+	if !wideTwo || count <= 1 {
+		replacement := addressWithRepeated(call, ssid, true, last)
+		copy(address, replacement)
+		return append([]byte(nil), frame...), true
+	}
+	if count > maxHops {
+		return nil, false
+	}
+	return insertRemainingWideTwo(frame, offset, call, ssid, count, last), true
+}
+
+func wideTwoRemainingHops(name string) (int, bool) {
+	upperName := strings.ToUpper(name)
+	if !strings.HasPrefix(upperName, "WIDE2-") {
+		return 0, false
+	}
+	count, err := strconv.Atoi(strings.TrimPrefix(upperName, "WIDE2-"))
+	return count, err == nil
+}
+
+func insertRemainingWideTwo(frame []byte, offset int, call string, ssid byte, count int, last bool) []byte {
+	repeated := addressWithRepeated(call, ssid, true, false)
+	remaining := addressWithRepeated("WIDE2", byte(count-1), false, last)
+	result := make([]byte, len(frame)+ax25AddressLength)
+	copy(result, frame[:offset])
+	copy(result[offset:offset+ax25AddressLength], repeated)
+	copy(result[offset+ax25AddressLength:offset+2*ax25AddressLength], remaining)
+	copy(result[offset+2*ax25AddressLength:], frame[offset+ax25AddressLength:])
+	return result
 }
 
 func pathAddress(value string) (string, byte, bool) {
@@ -195,7 +256,7 @@ func pathAddress(value string) (string, byte, bool) {
 func addressWithRepeated(call string, ssid byte, repeated, last bool) []byte {
 	address := Address(call, ssid, last)
 	if repeated {
-		address[6] |= 0x80
+		address[ax25AddressExtension] |= ax25AddressRepeatedMask
 	}
 	return address
 }
