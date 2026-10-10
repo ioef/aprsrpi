@@ -148,9 +148,57 @@ func TestParseTimestampedWeatherPackets(t *testing.T) {
 		if message.Weather.TemperatureC == nil || message.Weather.PressureHpa == nil || message.Weather.Humidity == nil || message.Weather.WindSpeedKnots == nil {
 			t.Fatalf("weather incomplete: %+v", message.Weather)
 		}
-		if message.Kind != "weather" || message.Type != "position" {
+		if message.Kind != "weather" || message.Type != "weather" {
 			t.Fatalf("classification = kind=%s type=%s", message.Kind, message.Type)
 		}
+	}
+}
+
+func TestClassifiesKnownPacketTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{"position without timestamp", "!4037.93N/02257.06E>comment", "position"},
+		{"position with timestamp", "@101024z4037.93N/02257.06E>comment", "position"},
+		{"weather position", "@101024z4037.93N/02257.06E_000/000g000t073h18b10220", "weather"},
+		{"standalone weather", "_t073h18b10220", "weather"},
+		{"raw GPS", "$GPGGA,123519", "raw-gps"},
+		{"Agrelo DFJr", "%DFJR", "agrelo-dfjr"},
+		{"Peet Bros", "&PEET", "peet-bros"},
+		{"Mic-E", "`abc", "mic-e"},
+		{"message", ":N0CALL   :Hello", "message"},
+		{"message acknowledgement", ":N0CALL   :ack123", "ack"},
+		{"message rejection", ":N0CALL   :rej123", "reject"},
+		{"object", ";OBJECT   *101024z4037.93N/02257.06E>", "object"},
+		{"item", ")ITEM!4037.93N/02257.06E>", "item"},
+		{"capabilities", "<capabilities", "capabilities"},
+		{"status", ">status", "status"},
+		{"query", "?APRSD", "query"},
+		{"telemetry data", "T#001,001,002,003,004,005,00000000", "telemetry"},
+		{"telemetry parameters", "PARM.Battery,Temperature", "telemetry"},
+		{"telemetry units", "UNIT.V,degC", "telemetry"},
+		{"telemetry equations", "EQNS.0,1,0", "telemetry"},
+		{"telemetry bits", "BITS.11111111,Digital", "telemetry"},
+		{"Maidenhead locator", "[AB12", "maidenhead"},
+		{"user-defined", "{test", "user-defined"},
+		{"fault", "|test", "fault"},
+		{"third-party", "}N0CALL>APRS:>status", "third-party"},
+		{"reserved identifier", "\"unused", "reserved"},
+		{"unknown identifier", "xunsupported", "unknown"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			message, ok := ParseTNC2("N0CALL>APRS:" + test.payload)
+			if !ok {
+				t.Fatal("ParseTNC2 rejected packet")
+			}
+			if message.Type != test.want {
+				t.Fatalf("Type = %q, want %q", message.Type, test.want)
+			}
+		})
 	}
 }
 

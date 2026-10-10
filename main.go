@@ -51,7 +51,7 @@ func main() {
 	go isClient.Run(ctx, func(line string) {
 		logging.Debugf("aprs-is raw=%q", line)
 		if message, ok := aprs.ParseTNC2(line); ok {
-			hub.Publish(message)
+			publishMessage(hub, message)
 			logging.Infof("aprs-is receive source=%s destination=%s type=%s payload=%q", message.Source, message.Destination, message.Type, message.Payload)
 			logging.Debugf("aprs-is parsed source=%q destination=%q path=%q payload=%q position=%+v weather=%+v telemetry=%+v", message.Source, message.Destination, message.Path, message.Payload, message.Position, message.Weather, message.Telemetry)
 			if settings.IGate.Enabled && policy.AllowInternetMessage(message, heard, settings.IGate.MessageGate) && limiter.Allow("is-to-rf", time.Minute/6) && windowLimiter.Allow("is-to-rf-minute", settings.IGate.MaxPerMinute, time.Minute) && windowLimiter.Allow("is-to-rf-five-minute", settings.IGate.MaxPerFiveMinutes, 5*time.Minute) {
@@ -135,6 +135,64 @@ func formatCoordinate(value float64, latitude bool) string {
 	return fmt.Sprintf("%03d%05.2f%s", degrees, minutes, direction)
 }
 
+func publishMessage(hub *gateway.Hub, message aprs.Message) {
+	hub.Publish(message)
+	if report := weatherReport(message.Payload); report != "" {
+		hub.Publish(aprs.Message{
+			Source:      message.Source,
+			Destination: message.Destination,
+			Type:        "weather",
+			Payload:     report,
+		})
+	}
+}
+
+func weatherReport(payload string) string {
+	fields := make([]string, 0, 5)
+	for _, field := range []struct {
+		marker byte
+		width  int
+		label  string
+	}{
+		{'t', 3, "Temperature"},
+		{'h', 2, "Humidity"},
+		{'b', 5, "Pressure"},
+		{'s', 3, "Wind"},
+		{'g', 3, "Gust"},
+		{'c', 3, "Direction"},
+	} {
+		for i := 0; i+1+field.width <= len(payload); i++ {
+			if payload[i] != field.marker || (i > 0 && payload[i-1] >= 'a' && payload[i-1] <= 'z') {
+				continue
+			}
+			value, err := strconv.Atoi(payload[i+1 : i+1+field.width])
+			if err != nil {
+				continue
+			}
+			switch field.marker {
+			case 't':
+				fields = append(fields, fmt.Sprintf("%s: %d°F", field.label, value))
+			case 'h':
+				if value == 0 {
+					value = 100
+				}
+				fields = append(fields, fmt.Sprintf("%s: %d%%", field.label, value))
+			case 'b':
+				fields = append(fields, fmt.Sprintf("%s: %.1f hPa", field.label, float64(value)/10))
+			case 's', 'g':
+				fields = append(fields, fmt.Sprintf("%s: %d mph", field.label, value))
+			case 'c':
+				fields = append(fields, fmt.Sprintf("%s: %d°", field.label, value))
+			}
+			break
+		}
+	}
+	if len(fields) < 2 {
+		return ""
+	}
+	return strings.Join(fields, ", ")
+}
+
 func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, radio *radioWriter, isClient *aprsis.Client, seenRF, seenDigi *policy.Cache, limiter *policy.Limiter, windowLimiter *policy.WindowLimiter, heard *policy.Heard) {
 	for {
 		select {
@@ -164,7 +222,7 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 					continue
 				}
 				logging.Debugf("rf raw_kiss_frame=%x", frame)
-				hub.Publish(message)
+				publishMessage(hub, message)
 				logging.Infof("rf receive source=%s destination=%s type=%s payload=%q", message.Source, message.Destination, message.Type, message.Payload)
 				logging.Debugf("rf parsed source=%q destination=%q path=%q payload=%q position=%+v weather=%+v telemetry=%+v", message.Source, message.Destination, message.Path, message.Payload, message.Position, message.Weather, message.Telemetry)
 				heard.Mark(message.Source)
@@ -187,6 +245,7 @@ func receiveLoop(ctx context.Context, hub *gateway.Hub, settings config.Config, 
 						} else {
 							logging.Infof("digipeater transmit source=%s", message.Source)
 						}
+
 					}
 				}
 				if err := bot.Handle(radio, message, bot.Config{Callsign: settings.Bot.Callsign, Location: settings.Bot.Location, WeatherCity: settings.Bot.WeatherCity, Repeaters: settings.Bot.Repeaters, Sunrise: settings.Bot.Sunrise, Sunset: settings.Bot.Sunset, OpenWeatherAPIKey: settings.Bot.OpenWeatherAPIKey}); err != nil {

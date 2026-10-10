@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const messages = ref([])
 const connected = ref(false)
@@ -7,11 +7,95 @@ const expanded = ref(false)
 const weatherReportOpen = ref(false)
 const mapDialogOpen = ref(false)
 const mapDialogURL = ref('')
+const morsePlaying = ref(false)
+const morseError = ref('')
 let source
+let morseContext
+let morseStopTimer
+
+const morseCode = {
+  A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....',
+  I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.',
+  Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-',
+  Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-',
+  5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '-': '-....-', '/': '-..-.',
+}
 
 const latest = computed(() => messages.value[0])
 const visibleHistory = computed(() => expanded.value ? messages.value : messages.value.slice(0, 8))
 const latestWeather = computed(() => messages.value.find((message) => message.weather))
+
+function stopMorse() {
+  clearTimeout(morseStopTimer)
+  morseStopTimer = undefined
+  if (morseContext && morseContext.state !== 'closed') {
+    void morseContext.close()
+  }
+  morseContext = undefined
+  morsePlaying.value = false
+}
+
+async function toggleMorse() {
+  if (morsePlaying.value) {
+    stopMorse()
+    return
+  }
+
+  morseError.value = ''
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) {
+    morseError.value = 'Morse audio is not supported by this browser.'
+    return
+  }
+
+  const characters = latest.value?.source.toUpperCase().split('')
+    .map((character) => morseCode[character])
+    .filter(Boolean)
+  if (!characters?.length) {
+    morseError.value = 'This callsign has no supported Morse characters.'
+    return
+  }
+
+  try {
+    const context = new AudioContextClass()
+    morseContext = context
+    await context.resume()
+
+    const dotSeconds = 0.08
+    const startAt = context.currentTime + 0.05
+    let elapsed = 0
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.frequency.value = 600
+    gain.gain.setValueAtTime(0, startAt)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+
+    characters.forEach((character, characterIndex) => {
+      for (const element of character) {
+        const duration = element === '.' ? dotSeconds : dotSeconds * 3
+        const toneStart = startAt + elapsed
+        gain.gain.setValueAtTime(0, toneStart)
+        gain.gain.linearRampToValueAtTime(0.08, toneStart + 0.005)
+        gain.gain.setValueAtTime(0.08, toneStart + duration - 0.005)
+        gain.gain.linearRampToValueAtTime(0, toneStart + duration)
+        elapsed += duration + dotSeconds
+      }
+      elapsed += dotSeconds * (characterIndex === characters.length - 1 ? -1 : 2)
+    })
+
+    oscillator.start(startAt)
+    oscillator.stop(startAt + elapsed + 0.02)
+    morsePlaying.value = true
+    morseStopTimer = window.setTimeout(stopMorse, (elapsed + 0.1) * 1000)
+  } catch (error) {
+    stopMorse()
+    morseError.value = 'Unable to play Morse audio.'
+    console.error('Morse playback failed:', error)
+  }
+}
+
+watch(() => latest.value?.source, stopMorse)
 
 function addMessage(message) {
   if (!message || typeof message !== 'object' || typeof message.id !== 'number') return
@@ -106,7 +190,10 @@ onMounted(async () => {
   connect()
 })
 
-onUnmounted(() => source?.close())
+onUnmounted(() => {
+  source?.close()
+  stopMorse()
+})
 </script>
 
 <template>
@@ -115,6 +202,7 @@ onUnmounted(() => source?.close())
       <div class="brand"><span class="brand-mark">//</span><span>APRS WATCH</span></div>
       <div class="topbar-actions">
         <button v-if="latestWeather" class="weather-button" type="button" @click="weatherReportOpen = true">Latest WX</button>
+        <button v-if="latest" class="morse-button" type="button" :aria-pressed="morsePlaying" :aria-label="morsePlaying ? 'Stop Morse playback' : `Play ${latest.source} in Morse`" @click="toggleMorse">{{ morsePlaying ? 'Stop Morse' : 'Morse' }}</button>
         <div class="status" :class="{ offline: !connected }"><span class="status-dot"></span>{{ connected ? 'LIVE' : 'WAITING FOR TNC' }}</div>
       </div>
     </header>
@@ -149,6 +237,7 @@ onUnmounted(() => source?.close())
       <div class="hero-grid">
         <div class="message-reading">
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
+          <p v-if="morseError" class="morse-error" role="status">{{ morseError }}</p>
           <div v-if="latest.kind !== 'weather'" class="payload-block"><small class="raw-label">Raw packet text</small><p class="payload">{{ latest.payload }}</p></div>
           <p v-else class="weather-summary">Structured weather report from {{ latest.source }}</p>
           <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div><div v-if="latest.position.micEStatus" class="position-comment">Mic-E message: {{ latest.position.micEStatus }}</div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>

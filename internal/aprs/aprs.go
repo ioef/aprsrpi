@@ -133,7 +133,7 @@ func Parse(frame []byte) (Message, bool) {
 	}
 	message := Message{Received: time.Now().UTC().Format(time.RFC3339), Source: addresses[1], Destination: addresses[0], Path: strings.Join(addresses[2:], " > "), Payload: payload, Raw: string(frame), Kind: "packet", Icon: "radio"}
 	message.Position = ParsePosition(payload, addresses[0])
-	if message.Position != nil && message.Position.SymbolCode == "_" {
+	if strings.HasPrefix(payload, "_") || message.Position != nil && message.Position.SymbolCode == "_" {
 		message.Weather = ParseWeather(payload)
 	}
 	if message.Position != nil {
@@ -142,7 +142,7 @@ func Parse(frame []byte) (Message, bool) {
 	if message.Weather != nil {
 		message.Kind, message.Icon = "weather", "weather"
 	}
-	message.Type = packetType(payload)
+	message.Type = packetType(payload, message.Position, message.Weather)
 	message.Telemetry = ParseTelemetry(payload)
 	if strings.HasPrefix(payload, ":") {
 		message.Kind, message.Icon = "message", "message"
@@ -453,25 +453,77 @@ func base91(value string) int {
 	return result
 }
 
-func packetType(payload string) string {
+func packetType(payload string, position *Position, weather *Weather) string {
 	if payload == "" {
 		return "unknown"
 	}
+	if weather != nil || payload[0] == '_' || position != nil && position.SymbolCode == "_" {
+		return "weather"
+	}
 	switch payload[0] {
 	case '!', '=', '/', '@':
-		if ParsePosition(payload) != nil {
-			return "position"
+		return "position"
+	case '$':
+		return "raw-gps"
+	case '%':
+		return "agrelo-dfjr"
+	case '&':
+		return "peet-bros"
+	case '\'', '`':
+		return "mic-e"
+	case ':':
+		if separator := strings.Index(payload[1:], ":"); separator >= 0 {
+			text := strings.ToLower(payload[separator+2:])
+			switch {
+			case strings.HasPrefix(text, "ack"):
+				return "ack"
+			case strings.HasPrefix(text, "rej"):
+				return "reject"
+			}
 		}
+		return "message"
 	case ';':
 		return "object"
 	case ')':
 		return "item"
-	case 'T', 'P', 'U', 'E', 'B':
-		if strings.HasPrefix(payload, "T#") || strings.HasPrefix(payload, "PARM") || strings.HasPrefix(payload, "UNIT") || strings.HasPrefix(payload, "EQNS") || strings.HasPrefix(payload, "BITS") {
+	case '<':
+		return "capabilities"
+	case '>':
+		return "status"
+	case '?':
+		return "query"
+	case '[':
+		return "maidenhead"
+	case '{':
+		return "user-defined"
+	case '|':
+		return "fault"
+	case '}':
+		return "third-party"
+	case 'T':
+		if strings.HasPrefix(payload, "T#") {
 			return "telemetry"
 		}
+	case 'P':
+		if strings.HasPrefix(payload, "PARM.") {
+			return "telemetry"
+		}
+	case 'U':
+		if strings.HasPrefix(payload, "UNIT.") {
+			return "telemetry"
+		}
+	case 'E':
+		if strings.HasPrefix(payload, "EQNS.") {
+			return "telemetry"
+		}
+	case 'B':
+		if strings.HasPrefix(payload, "BITS.") {
+			return "telemetry"
+		}
+	case '"', '#', '(', '*', '+', ',', '-', '.', '\\', ']', '^':
+		return "reserved"
 	}
-	return "packet"
+	return "unknown"
 }
 
 func ParseTelemetry(payload string) *Telemetry {

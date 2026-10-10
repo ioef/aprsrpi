@@ -15,6 +15,9 @@ button { color: inherit; font: inherit; }
 .topbar-actions { display: flex; align-items: center; gap: 22px; }
 .weather-button { border: 1px solid #496866; padding: 7px 10px; background: transparent; color: #e5a93d; cursor: pointer; font: 11px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
 .weather-button:hover { border-color: #e5a93d; background: #173038; }
+.morse-button { border: 1px solid #496866; padding: 7px 10px; background: transparent; color: #b8d2c7; cursor: pointer; font: 11px 'DM Mono', monospace; letter-spacing: .08em; text-transform: uppercase; }
+.morse-button:hover, .morse-button[aria-pressed="true"] { border-color: #e5a93d; background: #173038; color: #e5a93d; }
+.morse-error { margin: 12px 0 0; color: #d28b71; font: 12px 'DM Mono', monospace; }
 .weather-dialog-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(2 8 10 / 78%); }
 .weather-dialog { width: min(720px, 100%); border: 1px solid #496866; background: #0d1b20; box-shadow: 0 20px 70px rgb(0 0 0 / 45%); padding: 28px; }
 .weather-dialog-header { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid #294047; }
