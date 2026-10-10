@@ -136,7 +136,6 @@ func formatCoordinate(value float64, latitude bool) string {
 }
 
 func publishMessage(hub *gateway.Hub, message aprs.Message) {
-	hub.Publish(message)
 	if report := weatherReport(message.Payload); report != "" {
 		hub.Publish(aprs.Message{
 			Source:      message.Source,
@@ -145,6 +144,7 @@ func publishMessage(hub *gateway.Hub, message aprs.Message) {
 			Payload:     report,
 		})
 	}
+	hub.Publish(message)
 }
 
 func weatherReport(payload string) string {
