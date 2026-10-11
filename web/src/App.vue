@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const messages = ref([])
+const lastStatuses = ref(new Map())
 const stationPosition = ref(null)
 const connected = ref(false)
 const expanded = ref(false)
@@ -58,16 +59,21 @@ const packetComments = computed(() => {
   if (!message) return []
 
   const comments = []
-  const add = (label, value, href) => {
-    if (value !== undefined && value !== null && value !== '') comments.push({ label, value, href })
+  const add = (label, value, href, suffix = '') => {
+    if (value !== undefined && value !== null && value !== '') comments.push({ label, value, href, suffix })
   }
 
   add('Message', message.aprsMessage?.text)
-  add('Status', message.statusText)
   add('Mic-E', message.position?.micEStatus)
   add('Comment', message.position?.comment)
   add('PHG', message.position?.phg)
   add('URL', message.position?.url, message.position?.url)
+
+  const lastStatus = lastStatuses.value.get(message.source)?.statusText
+  if (lastStatus) {
+    const url = lastStatus.match(/https?:\/\/\S+/)?.[0]
+    add('Last status', url || lastStatus, url, url ? lastStatus.slice(url.length).trim() : '')
+  }
 
   return comments
 })
@@ -227,12 +233,19 @@ function addMessage(message) {
   message.kind = typeof message.kind === 'string' ? message.kind : 'packet'
   message.type = typeof message.type === 'string' ? message.type : 'packet'
   message.received = typeof message.received === 'string' && !Number.isNaN(Date.parse(message.received)) ? message.received : new Date().toISOString()
+  if (message.statusText) {
+    const previous = lastStatuses.value.get(message.source)
+    if (!previous || Date.parse(message.received) >= Date.parse(previous.received)) {
+      lastStatuses.value = new Map(lastStatuses.value).set(message.source, message)
+    }
+  }
   messages.value = [message, ...messages.value.filter((item) => item.id !== message.id)].slice(0, 100)
 }
 
 function loadMessages(payload) {
   if (!Array.isArray(payload)) return
   messages.value = []
+  lastStatuses.value = new Map()
   payload.forEach(addMessage)
 }
 
@@ -368,7 +381,7 @@ onUnmounted(() => {
           <div v-if="packetComments.length" class="packet-comments" aria-label="Packet comments">
             <p v-for="comment in packetComments" :key="comment.label" class="packet-comment">
               <span class="packet-comment-label">{{ comment.label }}:</span>
-              <a v-if="comment.href" :href="comment.href" target="_blank" rel="noreferrer">{{ comment.value }}</a>
+              <template v-if="comment.href"><a :href="comment.href" target="_blank" rel="noreferrer">{{ comment.value }}</a><span v-if="comment.suffix"> {{ comment.suffix }}</span></template>
               <span v-else>{{ comment.value }}</span>
             </p>
           </div>

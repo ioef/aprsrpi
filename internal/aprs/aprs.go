@@ -376,7 +376,11 @@ func parseCompressedPosition(value, timestamp string) *Position {
 		return nil
 	}
 	position := &Position{Latitude: lat, Longitude: lon, SymbolTable: string(value[0]), SymbolCode: string(value[9]), Timestamp: timestamp}
-	return positionMetadata(position, value[10:])
+	comment := ""
+	if len(value) > 13 {
+		comment = value[13:]
+	}
+	return positionMetadata(position, comment)
 }
 
 func parseUncompressedPosition(value, timestamp string) *Position {
@@ -579,7 +583,7 @@ func isSymbolTable(value byte) bool {
 }
 
 func positionMetadata(position *Position, comment string) *Position {
-	position.Comment = strings.TrimSpace(comment)
+	position.Comment = stripBase91Telemetry(strings.TrimSpace(comment))
 	position.Locator = maidenhead(position.Latitude, position.Longitude)
 	for {
 		comment := position.Comment
@@ -605,6 +609,30 @@ func positionMetadata(position *Position, comment string) *Position {
 			return positionMetadataURL(position)
 		}
 	}
+}
+
+func stripBase91Telemetry(comment string) string {
+	start := strings.IndexByte(comment, '|')
+	if start < 0 {
+		return comment
+	}
+	endOffset := strings.IndexByte(comment[start+1:], '|')
+	if endOffset < 0 {
+		return comment
+	}
+	end := start + 1 + endOffset
+	if parseBase91TelemetryValues(comment[start+1:end]) == nil {
+		return comment
+	}
+	before := strings.TrimSpace(comment[:start])
+	after := strings.TrimSpace(comment[end+1:])
+	if before == "" {
+		return after
+	}
+	if after == "" {
+		return before
+	}
+	return before + " " + after
 }
 
 func positionMetadataURL(position *Position) *Position {

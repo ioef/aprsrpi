@@ -108,6 +108,29 @@ func TestParseCompressedPosition(t *testing.T) {
 	}
 }
 
+func TestParseCompressedPositionCommentAndTelemetry(t *testing.T) {
+	message, ok := ParseTNC2("SV2AHT-13>APNU19:!L:5b/T.H/#  GLoRa APRS|(i${|")
+	if !ok || message.Position == nil {
+		t.Fatalf("compressed position was not decoded: %+v", message)
+	}
+	if message.Position.Comment != "LoRa APRS" {
+		t.Fatalf("comment = %q, want %q", message.Position.Comment, "LoRa APRS")
+	}
+	if message.Telemetry == nil || !message.Telemetry.Base91 {
+		t.Fatalf("base91 telemetry was not decoded: %+v", message.Telemetry)
+	}
+}
+
+func TestParsePHGPositionComment(t *testing.T) {
+	message, ok := ParseTNC2("SV2AHT-11>APNU19:!4006.43NT02227.59E#PHG3390/[ HRT tel:2310 310649-24hours ] .")
+	if !ok || message.Position == nil {
+		t.Fatalf("position was not decoded: %+v", message)
+	}
+	if message.Position.Comment != "/[ HRT tel:2310 310649-24hours ] ." {
+		t.Fatalf("comment = %q", message.Position.Comment)
+	}
+}
+
 func TestParseStandardWeather(t *testing.T) {
 	weather := ParseWeather("/18030.00N/02200.00Ed180t090g120s080r001p005h75b10132")
 	if weather == nil || weather.TemperatureC == nil || weather.WindDirection == nil || weather.WindSpeedKnots == nil || weather.GustKnots == nil || weather.Humidity == nil || weather.PressureHpa == nil {
