@@ -77,6 +77,18 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"kiss": settings.KISS.Endpoint, "mode": "live", "bot": settings.Bot.Callsign})
 	})
+	mux.HandleFunc("/api/station", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Configured bool    `json:"configured"`
+			Latitude   float64 `json:"latitude"`
+			Longitude  float64 `json:"longitude"`
+		}{
+			Configured: settings.Station.Latitude != 0 || settings.Station.Longitude != 0,
+			Latitude:   settings.Station.Latitude,
+			Longitude:  settings.Station.Longitude,
+		})
+	})
 	mux.Handle("/", http.FileServer(http.Dir(settings.WebRoot)))
 	address := settings.HTTPAddress
 	log.Printf("APRS kiosk listening on %s; KISS endpoint %s", address, settings.KISS.Endpoint)

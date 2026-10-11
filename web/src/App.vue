@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const messages = ref([])
+const stationPosition = ref(null)
 const connected = ref(false)
 const expanded = ref(false)
 const weatherReportOpen = ref(false)
@@ -25,6 +26,51 @@ const morseCode = {
 const latest = computed(() => messages.value[0])
 const visibleHistory = computed(() => expanded.value ? messages.value : messages.value.slice(0, 8))
 const latestWeather = computed(() => messages.value.find((message) => message.weather))
+const latestDistance = computed(() => {
+  const position = latest.value?.position
+  const station = stationPosition.value
+  if (!position || !station
+    || !Number.isFinite(position.latitude) || !Number.isFinite(position.longitude)
+    || Math.abs(position.latitude) > 90 || Math.abs(position.longitude) > 180) return ''
+
+  const radians = (degrees) => degrees * Math.PI / 180
+  const latitude1 = radians(station.latitude)
+  const latitude2 = radians(position.latitude)
+  const latitudeDelta = latitude2 - latitude1
+  const longitudeDelta = radians(position.longitude - station.longitude)
+  const sinLatitude = Math.sin(latitudeDelta / 2)
+  const sinLongitude = Math.sin(longitudeDelta / 2)
+  const haversine = Math.min(1, sinLatitude ** 2 + Math.cos(latitude1) * Math.cos(latitude2) * sinLongitude ** 2)
+  const distanceKm = 6371.0088 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  const bearingY = Math.sin(longitudeDelta) * Math.cos(latitude2)
+  const bearingX = Math.cos(latitude1) * Math.sin(latitude2) - Math.sin(latitude1) * Math.cos(latitude2) * Math.cos(longitudeDelta)
+  const bearing = (Math.atan2(bearingY, bearingX) * 180 / Math.PI + 360) % 360
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+  const direction = directions[Math.round(bearing / 45) % directions.length]
+  const distance = distanceKm < 1
+    ? `${distanceKm.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`
+    : `${Math.round(distanceKm)} km`
+
+  return `${distance} ${direction}`
+})
+const packetComments = computed(() => {
+  const message = latest.value
+  if (!message) return []
+
+  const comments = []
+  const add = (label, value, href) => {
+    if (value !== undefined && value !== null && value !== '') comments.push({ label, value, href })
+  }
+
+  add('Message', message.aprsMessage?.text)
+  add('Status', message.statusText)
+  add('Mic-E', message.position?.micEStatus)
+  add('Comment', message.position?.comment)
+  add('PHG', message.position?.phg)
+  add('URL', message.position?.url, message.position?.url)
+
+  return comments
+})
 const structuredDetails = computed(() => {
   const message = latest.value
   if (!message) return []
@@ -36,7 +82,6 @@ const structuredDetails = computed(() => {
 
   if (message.aprsMessage) {
     add('Addressee', message.aprsMessage.addressee)
-    add('Message', message.aprsMessage.text)
     add('Message number', message.aprsMessage.number)
     add('Reply acknowledgement', message.aprsMessage.replyAck)
   }
@@ -44,7 +89,6 @@ const structuredDetails = computed(() => {
     add('Object', `${message.object.name} · ${message.object.alive ? 'active' : 'killed'}`)
     add('Object timestamp', message.object.timestamp)
   }
-  add('Status', message.statusText)
   add('Query', message.query)
   add('Grid locator', message.gridLocator)
 
@@ -196,18 +240,6 @@ function formatTime(value) {
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value))
 }
 
-function formatCoordinate(value, latitude) {
-  const direction = latitude ? (value < 0 ? 'S' : 'N') : (value < 0 ? 'W' : 'E')
-  const absolute = Math.abs(value)
-  const degrees = Math.floor(absolute)
-  const minutes = (absolute - degrees) * 60
-  return `${degrees}°${minutes.toFixed(2)}' ${direction}`
-}
-
-function formatLocation(position) {
-  return `${formatCoordinate(position.latitude, true)} ${formatCoordinate(position.longitude, false)}`
-}
-
 function mapURL(source) {
   return `https://aprs.fi/#!call=a%2F${encodeURIComponent(source)}`
 }
@@ -259,6 +291,18 @@ function connect() {
 }
 
 onMounted(async () => {
+  try {
+    const response = await fetch('/api/station')
+    if (!response.ok) throw new Error(`station request failed: ${response.status}`)
+    const station = await response.json()
+    if (station.configured && Number.isFinite(station.latitude) && Number.isFinite(station.longitude)
+      && Math.abs(station.latitude) <= 90 && Math.abs(station.longitude) <= 180) {
+      stationPosition.value = { latitude: station.latitude, longitude: station.longitude }
+    }
+  } catch (error) {
+    console.error('Unable to load configured station position:', error)
+  }
+
   try {
     const response = await fetch('/api/messages')
     if (!response.ok) throw new Error(`message request failed: ${response.status}`)
@@ -320,7 +364,14 @@ onUnmounted(() => {
         <div class="message-reading">
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
           <p v-if="latest.kind === 'weather'" class="weather-summary">Structured weather report from {{ latest.source }}</p>
-          <div v-if="latest.position" class="position-readout"><strong>Location:</strong> {{ formatLocation(latest.position) }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div><div v-if="latest.position.micEStatus" class="position-comment">Mic-E message: {{ latest.position.micEStatus }}</div><div v-if="latest.position.comment" class="position-comment">Comment: {{ latest.position.comment }}</div><div v-if="latest.position.phg" class="position-comment">PHG: {{ latest.position.phg }}</div><div v-if="latest.position.url" class="position-comment"><a :href="latest.position.url" target="_blank" rel="noreferrer">{{ latest.position.url }}</a></div></div>
+          <div v-if="latest.position" class="position-readout"><strong v-if="latestDistance">Distance:</strong> {{ latestDistance }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div></div>
+          <div v-if="packetComments.length" class="packet-comments" aria-label="Packet comments">
+            <p v-for="comment in packetComments" :key="comment.label" class="packet-comment">
+              <span class="packet-comment-label">{{ comment.label }}:</span>
+              <a v-if="comment.href" :href="comment.href" target="_blank" rel="noreferrer">{{ comment.value }}</a>
+              <span v-else>{{ comment.value }}</span>
+            </p>
+          </div>
           <dl v-if="structuredDetails.length" class="packet-details" aria-label="Decoded packet details">
             <div v-for="detail in structuredDetails" :key="detail.label" class="packet-detail">
               <dt>{{ detail.label }}</dt>
