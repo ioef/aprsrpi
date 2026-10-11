@@ -63,6 +63,10 @@ The following examples show the physical station and the main APRS kiosk views.
 
 The APRS parser handles the standard information-field data types in the APRS Protocol Reference, including positions (timestamped, compressed, and ambiguous), weather, telemetry, messages and bulletins, objects/items, queries, status, grid locators, and third-party packets. Compressed positions with alphanumeric overlay symbol tables are supported, including weather stations using the weather symbol. It keeps the original payload for display and forwarding. Vendor-specific raw weather formats and user-defined payloads are retained and classified where possible; their opaque application data is not decoded without a format definition.
 
+## Kiosk Morse playback
+
+Use the **Morse OFF** button in the kiosk toolbar to enable automatic Morse playback when a newly received packet changes the displayed source callsign. The button changes to **Morse ON** while enabled and shows **PLAYING** during playback. Click it again to disable playback. Audio is generated in the browser, so the browser must support the Web Audio API; playback begins only after the user enables it.
+
 ## APRS frame diagram
 
 On a KISS connection, the AX.25 frame is bracketed and escaped by KISS. The KISS command byte is transport framing, not part of the AX.25 packet:
