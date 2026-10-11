@@ -364,7 +364,7 @@ onUnmounted(() => {
         <div class="message-reading">
           <div class="identity"><span class="aprs-symbol" :class="spriteClass(latest)" :style="spriteStyle(latest)" :data-overlay="spriteOverlay(latest)" aria-hidden="true"></span><div><div class="callsign">{{ latest.source }}</div><div class="route">to {{ latest.destination }}<span v-if="latest.path"> via {{ latest.path }}</span></div></div></div>
           <p v-if="latest.kind === 'weather'" class="weather-summary">Structured weather report from {{ latest.source }}</p>
-          <div v-if="latest.position" class="position-readout"><strong v-if="latestDistance">Distance:</strong> {{ latestDistance }} <span>{{ latest.symbol }}</span><div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div></div>
+          <div v-if="latest.position" class="position-readout"><strong v-if="latestDistance">Distance:</strong> {{ latestDistance }}<div class="location-links">locator <button class="map-button" type="button" @click="openLocator(latest.position.locator)">{{ latest.position.locator }}</button> <span aria-hidden="true">-</span> <button class="map-button" type="button" @click="openMap(latest.source)">show map</button></div></div>
           <div v-if="packetComments.length" class="packet-comments" aria-label="Packet comments">
             <p v-for="comment in packetComments" :key="comment.label" class="packet-comment">
               <span class="packet-comment-label">{{ comment.label }}:</span>

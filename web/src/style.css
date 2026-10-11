@@ -69,7 +69,7 @@ button { color: inherit; font: inherit; }
 .packet-panel { display: grid; gap: 16px; color: #76918e; font: 17px 'DM Mono', monospace; }
 .packet-panel small { font-size: 15px; }
 .packet-panel strong { margin-bottom: 20px; color: #c6d8d1; font-size: 28px; font-weight: 500; overflow-wrap: anywhere; }
-.position-readout { margin-top: 32px; color: #edf5f1; font-size: clamp(24px, 3vw, 40px); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.position-readout { margin-top: 32px; color: #edf5f1; font-size: clamp(28px, 3.4vw, 44px); font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
 .position-readout strong { display: block; margin-bottom: 8px; color: #8caba8; font: 12px 'DM Mono', monospace; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
 .position-readout span { margin-left: 14px; color: #e5a93d; font-size: .5em; vertical-align: middle; }
 .location-links { margin-top: 12px; color: #84a09e; font: 14px 'DM Mono', monospace; letter-spacing: .02em; }
@@ -79,7 +79,7 @@ button { color: inherit; font: inherit; }
 .map-button:hover { color: #e5a93d; border-color: #e5a93d; }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid #e5a93d; outline-offset: 3px; }
 .packet-comments { display: grid; gap: 8px; max-width: 900px; margin-top: 20px; }
-.packet-comment { display: flex; gap: 8px; margin: 0; color: #c6d8d1; font: 14px/1.5 'Space Grotesk', sans-serif; overflow-wrap: anywhere; }
+.packet-comment { display: flex; gap: 8px; margin: 0; color: #c6d8d1; font: 16px/1.5 'Space Grotesk', sans-serif; overflow-wrap: anywhere; }
 .packet-comment-label { flex: 0 0 auto; color: #8caba8; }
 .packet-comment a { color: #b8d2c7; text-decoration: underline; text-underline-offset: 3px; }
 .packet-line { justify-content: space-between; max-width: 650px; margin-top: 42px; padding-top: 15px; border-top: 1px solid #294047; color: #64817f; font: 11px 'DM Mono', monospace; letter-spacing: .1em; }
