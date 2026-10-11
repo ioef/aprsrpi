@@ -79,7 +79,7 @@ button { color: inherit; font: inherit; }
 .map-button:hover { color: #e5a93d; border-color: #e5a93d; }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid #e5a93d; outline-offset: 3px; }
 .packet-comments { display: grid; gap: 8px; max-width: 900px; margin-top: 20px; }
-.packet-comment { display: flex; gap: 8px; margin: 0; color: #c6d8d1; font: 16px/1.5 'Space Grotesk', sans-serif; overflow-wrap: anywhere; }
+.packet-comment { display: flex; gap: 8px; margin: 0; color: #c6d8d1; font: 600 clamp(28px, 3.4vw, 44px)/1.2 'Space Grotesk', sans-serif; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .packet-comment-label { flex: 0 0 auto; color: #8caba8; }
 .packet-comment a { color: #b8d2c7; text-decoration: underline; text-underline-offset: 3px; }
 .packet-line { justify-content: space-between; max-width: 650px; margin-top: 42px; padding-top: 15px; border-top: 1px solid #294047; color: #64817f; font: 11px 'DM Mono', monospace; letter-spacing: .1em; }
